@@ -18,6 +18,7 @@ const formView          = $("formView");
 const loadingView       = $("loadingView");
 const errorView         = $("errorView");
 const errorMsg          = $("errorMsg");
+const confirmView       = $("confirmView");
 const companyResult     = $("companyResult");
 const vesselResult      = $("vesselResult");
 const settingsView      = $("settingsView");
@@ -45,8 +46,9 @@ const saveBtn               = $("saveBtn");
 const testBtn               = $("testBtn");
 const settingsStatus        = $("settingsStatus");
 
-let mode     = "company";
-let firstRun = false;
+let mode         = "company";
+let firstRun     = false;
+let pendingQCheck = null;
 
 // ---------- Office.js init ----------
 Office.onReady(() => {
@@ -73,6 +75,8 @@ function initApp() {
     settingsStatus.className   = "";
     showView(settingsView);
   } else {
+    // ensure Back button is visible for returning users
+    closeSettingsBtn.classList.remove("hidden");
     showView(formView);
   }
 }
@@ -88,6 +92,13 @@ function bindEvents() {
   closeSettingsBtn.addEventListener("click", () => showView(formView));
   saveBtn.addEventListener("click", saveSettings);
   testBtn.addEventListener("click", testConnection);
+  $("confirmProceedBtn").addEventListener("click", () => {
+    if (pendingQCheck) { const fn = pendingQCheck; pendingQCheck = null; fn(); }
+  });
+  $("confirmCancelBtn").addEventListener("click", () => {
+    pendingQCheck = null;
+    showView(formView);
+  });
 }
 
 // ---------- ISM Company collapse ----------
@@ -199,9 +210,9 @@ async function testConnection() {
 
   try {
     const resp = await fetch(`${base}/api/v1/qcheck/company`, {
-      method: "POST",
+      method:  "POST",
       headers: { "Content-Type": "application/json", "X-API-Key": key },
-      body: JSON.stringify({ company_imo: "" })
+      body:    JSON.stringify({ company_imo: "" })
     });
     if (resp.status === 401) {
       settingsStatus.textContent = "API key rejected (401). Check the key.";
@@ -221,13 +232,19 @@ async function testConnection() {
 
 // ---------- View switching ----------
 function showView(view) {
-  [formView, loadingView, errorView, companyResult, vesselResult, settingsView].forEach(v => v.classList.add("hidden"));
+  [formView, loadingView, errorView, confirmView, companyResult, vesselResult, settingsView]
+    .forEach(v => v.classList.add("hidden"));
   view.classList.remove("hidden");
 }
 
 // ---------- Validation ----------
 function isValidImo(v) {
   return /^\d{1,7}$/.test((v || "").trim());
+}
+
+// Normalize IMO for comparison (strip leading zeros)
+function isSameImo(a, b) {
+  return parseInt(a || 0, 10) === parseInt(b || 0, 10) && parseInt(a || 0, 10) !== 0;
 }
 
 // ---------- Run ----------
@@ -242,12 +259,26 @@ async function runQCheck() {
     const name = companyName.value.trim();
     if (!isValidImo(imo)) return showError("Please enter a valid Company IMO.");
 
-    await callApi({
+    const proceed = () => callApi({
       url:  `${apiBase}/api/v1/qcheck/company`,
       apiKey,
       body: { company_imo: imo, company_name: name },
       onOk: (data) => renderCompanyResult({ imo, name, data })
     });
+
+    // Check if company already exists in the database
+    if (getSetting(SETTING_COMPANIES_KEY, "")) {
+      const results = await searchCompanies({ imo });
+      const found   = results.find(r => isSameImo(r.company_imo, imo));
+      if (found) {
+        pendingQCheck = proceed;
+        showView(confirmView);
+        return;
+      }
+    }
+
+    await proceed();
+
   } else {
     const vImo = vesselImo.value.trim();
     const cImo = vesselCompanyImo.value.trim();
@@ -300,13 +331,31 @@ function showError(message) {
   showView(errorView);
 }
 
+// ---------- Colour mapping ----------
+// Handles both performance-style ("High/Low/Very Low Performance") and
+// assessment-style ("Acceptable", "Review Needed", "Not Acceptable") values.
+function colorClass(v) {
+  if (!v) return "amber";
+  const s = v.toLowerCase();
+  // Red — check most specific first
+  if (s.includes("not acceptable")) return "red";
+  if (s.includes("very low"))       return "red";
+  // Amber
+  if (s.includes("review"))         return "amber";
+  if (s.includes("low"))            return "amber";   // "Low Performance" (not "Very Low")
+  // Green
+  if (s.includes("high"))           return "green";   // "High Performance"
+  if (s.includes("acceptable"))     return "green";   // "Acceptable"
+  return "amber";
+}
+
 // ---------- Render ----------
 function renderCompanyResult({ imo, name, data }) {
   $("companyResultName").textContent = name || "Company";
   $("companyResultImo").textContent  = `IMO: ${imo}`;
   const banner = $("companyResultBanner");
   banner.textContent = data.global_performance || "Unknown";
-  banner.className   = "result-banner " + colorClassForPerformance(data.global_performance);
+  banner.className   = "result-banner " + colorClass(data.global_performance);
   const url = data.shareable_url || "";
   $("companyShareUrl").textContent = url;
   $("companyCopyBtn").onclick = () => copyToClipboard(url, $("companyCopyBtn"));
@@ -321,7 +370,7 @@ function renderVesselResult({ vImo, vNm, data }) {
   const a = data.assessment || {};
   const gBanner = $("vesselGlobalBanner");
   gBanner.textContent = a.global || "Unknown";
-  gBanner.className   = "global-banner " + colorClassForAssessment(a.global);
+  gBanner.className   = "global-banner " + colorClass(a.global);
   setPill($("vesselAgePill"),     a.age);
   setPill($("vesselPscPill"),     a.psc);
   setPill($("vesselCompanyPill"), a.company);
@@ -335,25 +384,7 @@ function renderVesselResult({ vImo, vNm, data }) {
 
 function setPill(el, value) {
   el.textContent = value || "Unknown";
-  el.className   = "factor-pill " + colorClassForAssessment(value);
-}
-
-function colorClassForPerformance(p) {
-  if (!p) return "amber";
-  const s = p.toLowerCase();
-  if (s.includes("very low"))   return "red";
-  if (s.includes("low"))        return "amber";
-  if (s.includes("acceptable")) return "green";
-  return "amber";
-}
-
-function colorClassForAssessment(a) {
-  if (!a) return "amber";
-  const s = a.toLowerCase();
-  if (s.includes("not acceptable")) return "red";
-  if (s.includes("review"))         return "amber";
-  if (s.includes("acceptable"))     return "green";
-  return "amber";
+  el.className   = "factor-pill " + colorClass(value);
 }
 
 // ---------- Company autocomplete ----------
@@ -464,10 +495,10 @@ function setupAutocomplete({ inputEl, pairedEl, searchParam, dropdownEl }) {
 
     items.forEach((item, i) => {
       const el = document.createElement("div");
-      el.className  = "ts-option";
+      el.className   = "ts-option";
       el.dataset.idx = i;
-      el.innerHTML  = `<div class="ts-opt-primary">${escHtml(item.company_imo)}</div>`
-                    + `<div class="ts-opt-secondary">${escHtml(item.company_name)}</div>`;
+      el.innerHTML   = `<div class="ts-opt-primary">${escHtml(item.company_imo)}</div>`
+                     + `<div class="ts-opt-secondary">${escHtml(item.company_name)}</div>`;
       el.addEventListener("mousedown", (e) => { e.preventDefault(); pick(item); });
       dropdownEl.appendChild(el);
     });
