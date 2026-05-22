@@ -470,3 +470,84 @@ input[type="text"]:focus, input[type="password"]:focus {
 }
 .status-msg.ok    { background: #dcfce7; color: #15803d; }
 .status-msg.error { background: #fee2e2; color: #991b1b; }
+
+/* ---------- Autocomplete (Tom Select style) ---------- */
+.ts-wrap {
+  position: relative;
+  width: 100%;
+}
+
+/* magnifying glass icon via CSS background on the input */
+.ts-wrap input[type="text"] {
+  width: 100%;
+  padding-left: 30px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 8px center;
+  background-size: 14px 14px;
+}
+
+/* dropdown is fixed so it isn't clipped by the scrollable view-body */
+.ts-dropdown {
+  position: fixed;
+  z-index: 9999;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.13);
+  max-height: 230px;
+  overflow-y: auto;
+}
+
+.ts-option {
+  padding: 9px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #f1f5f9;
+  transition: background 0.1s;
+}
+.ts-option:last-child { border-bottom: none; }
+
+.ts-option:hover,
+.ts-option.active {
+  background: #145b76;
+}
+.ts-option:hover .ts-opt-primary,
+.ts-option.active .ts-opt-primary  { color: #fff; }
+.ts-option:hover .ts-opt-secondary,
+.ts-option.active .ts-opt-secondary { color: rgba(255,255,255,0.75); }
+
+.ts-opt-primary {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.ts-opt-secondary {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 1px;
+}
+
+.ts-option-create {
+  padding: 9px 12px;
+  font-size: 12px;
+  color: #64748b;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+}
+
+.ts-option-create kbd {
+  background: #e2e8f0;
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 11px;
+  font-family: inherit;
+  color: #334155;
+}
+
+.ts-option-loading {
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #94a3b8;
+  text-align: center;
+}
