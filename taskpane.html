@@ -12,10 +12,7 @@
     <!-- Header -->
     <div class="header">
       <div class="header-title">Q Check</div>
-      <div class="header-actions">
-        <button class="send-ticket-btn hidden" id="sendBtn" title="Send to Maritime Team">✉</button>
-        <button class="settings-btn" id="settingsBtn" title="Settings">⚙</button>
-      </div>
+      <button class="settings-btn" id="settingsBtn" title="Settings">⚙</button>
     </div>
 
     <!-- Toggle -->
@@ -100,8 +97,8 @@
     <div class="view hidden" id="loadingView">
       <div class="view-body loading-body">
         <div class="spinner"></div>
-        <div class="loading-text" id="loadingText">Running Q Check…</div>
-        <div class="loading-sub" id="loadingSub">This can take up to 90 seconds</div>
+        <div class="loading-text">Running Q Check…</div>
+        <div class="loading-sub">This can take up to 90 seconds</div>
       </div>
     </div>
 
@@ -229,64 +226,6 @@
         <div id="settingsStatus"></div>
 
         <button class="secondary-btn full" id="closeSettings" style="margin-top: 16px;">Back</button>
-      </div>
-    </div>
-
-    <!-- Send to Maritime Team -->
-    <div class="view hidden" id="ticketView">
-      <div class="view-body">
-        <h3 class="settings-title">Send to Maritime Team</h3>
-
-        <div class="ticket-error hidden" id="ticketErrorMsg"></div>
-
-        <div class="field-group">
-          <label>
-            Title <span class="req">*</span>
-            <input type="text" id="ticketTitle" placeholder="Brief description of the issue" autocomplete="off" />
-          </label>
-
-          <label>
-            Description <span class="req">*</span>
-            <textarea id="ticketText" placeholder="Detailed description…" rows="4"></textarea>
-          </label>
-
-          <label>
-            Vessel Name <span class="opt">(optional)</span>
-            <input type="text" id="ticketVesselName" placeholder="e.g. MV EXAMPLE" autocomplete="off" />
-          </label>
-
-          <label>
-            Vessel IMO <span class="opt">(optional)</span>
-            <input type="text" id="ticketVesselImo" placeholder="7-digit IMO" autocomplete="off" />
-          </label>
-
-          <label>
-            Category <span class="req">*</span>
-            <select id="ticketCatL1"></select>
-            <div id="catL2Wrap" class="hidden cat-sub-select">
-              <select id="ticketCatL2"></select>
-            </div>
-            <div id="catL3Wrap" class="hidden cat-sub-select">
-              <select id="ticketCatL3"></select>
-            </div>
-          </label>
-        </div>
-
-        <button class="run-btn" id="submitTicketBtn">Send to Maritime Team</button>
-        <button class="secondary-btn full" id="cancelTicketBtn" style="margin-top: 8px;">Cancel</button>
-      </div>
-    </div>
-
-    <!-- Ticket Created (success) -->
-    <div class="view hidden" id="ticketSuccessView">
-      <div class="view-body">
-        <div class="ticket-success-box">
-          <div class="ticket-success-icon">✓</div>
-          <div class="ticket-success-title">Ticket Created</div>
-          <div class="ticket-success-number">Ticket #<span id="ticketSuccessNumber"></span></div>
-          <div class="ticket-success-msg">Your request has been submitted to the Maritime Operations Department.</div>
-        </div>
-        <button class="secondary-btn full" id="ticketBackBtn" style="margin-top: 16px;">Back to Q Check</button>
       </div>
     </div>
   </div>

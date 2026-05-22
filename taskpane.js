@@ -38,7 +38,6 @@ const ismCollapseIcon   = $("ismCollapseIcon");
 const runBtn            = $("runBtn");
 const backToFormBtn     = $("backToForm");
 const settingsBtn       = $("settingsBtn");
-const sendBtn           = $("sendBtn");
 const closeSettingsBtn  = $("closeSettings");
 
 const apiBaseInput          = $("apiBase");
@@ -56,48 +55,6 @@ let mode           = "company";
 let firstRun       = false;
 let pendingQCheck  = null;
 let lastResultData = null;
-
-// ---------- Zammad category tree (hardcoded; mirrors Zammad admin config) ----------
-const CATEGORY_TREE = {
-  "Technical": {
-    "Hull & Structure":   ["Corrosion", "Cracks & Fractures", "Coating", "Other"],
-    "Main Engine":        ["Breakdown", "Performance Loss", "Maintenance", "Other"],
-    "Auxiliary Engine":   ["Breakdown", "Performance Loss", "Maintenance", "Other"],
-    "Navigation Systems": ["Radar", "GPS / GNSS", "AIS", "ECDIS", "Other"],
-    "Electrical":         ["Power Failure", "Lighting", "Switchboard", "Other"],
-    "Pumps & Piping":     ["Leakage", "Failure", "Maintenance", "Other"],
-    "Other":              []
-  },
-  "Operations": {
-    "Port State Control": ["Deficiency", "Detention", "Pre-Inspection", "Other"],
-    "Voyage":             ["Delay", "Deviation", "Weather Routing", "Other"],
-    "Cargo":              ["Damage", "Shortage", "Stowage Issue", "Other"],
-    "Bunkering":          ["Quality Issue", "Quantity Dispute", "Delay", "Other"],
-    "Other":              []
-  },
-  "Crew": {
-    "Manning":            ["Shortage", "Qualification Issue", "Crew Change", "Other"],
-    "Medical":            ["Illness", "Injury", "Medical Evacuation", "Other"],
-    "Training":           ["Certificate Renewal", "Drills", "Courses", "Other"],
-    "Other":              []
-  },
-  "Safety & Compliance": {
-    "ISM":                ["Non-conformity", "Audit", "Drill", "Other"],
-    "ISPS":               ["Security Alert", "Drill", "Audit", "Other"],
-    "MARPOL":             ["Pollution Incident", "Oil Record Book", "Garbage", "Other"],
-    "MLC":                ["Wages", "Rest Hours", "Accommodation", "Other"],
-    "Other":              []
-  },
-  "Commercial": {
-    "Charter Party":      ["Dispute", "Claim", "Amendment", "Other"],
-    "Hire & Freight":     ["Payment", "Dispute", "Off-hire", "Other"],
-    "Port Costs":         ["Invoice", "Dispute", "Disbursement Account", "Other"],
-    "Other":              []
-  },
-  "Other": {
-    "Other":              []
-  }
-};
 
 // ---------- Office.js init ----------
 Office.onReady(() => {
@@ -126,7 +83,6 @@ function initApp() {
     firstRun = true;
     toggleWrap.classList.add("hidden");
     settingsBtn.classList.add("hidden");
-    sendBtn.classList.add("hidden");
     closeSettingsBtn.classList.add("hidden");
     apiBaseInput.value         = getSetting(SETTING_API_BASE, DEFAULT_API_BASE);
     apiKeyInput.value          = getSetting(SETTING_API_KEY, "");
@@ -137,7 +93,6 @@ function initApp() {
     showView(settingsView);
   } else {
     closeSettingsBtn.classList.remove("hidden");
-    sendBtn.classList.remove("hidden");
     showView(formView);
   }
 }
@@ -150,15 +105,9 @@ function bindEvents() {
   runBtn.addEventListener("click", runQCheck);
   backToFormBtn.addEventListener("click", () => showView(formView));
   settingsBtn.addEventListener("click", openSettings);
-  sendBtn.addEventListener("click", openTicketForm);
   closeSettingsBtn.addEventListener("click", () => showView(formView));
   saveBtn.addEventListener("click", saveSettings);
   testBtn.addEventListener("click", testConnection);
-  $("submitTicketBtn").addEventListener("click", submitTicket);
-  $("cancelTicketBtn").addEventListener("click", () => showView(formView));
-  $("ticketBackBtn").addEventListener("click", () => showView(formView));
-  $("ticketCatL1").addEventListener("change", updateCatL2);
-  $("ticketCatL2").addEventListener("change", updateCatL3);
   $("confirmProceedBtn").addEventListener("click", () => {
     if (pendingQCheck) { const fn = pendingQCheck; pendingQCheck = null; fn(); }
   });
@@ -294,7 +243,6 @@ async function saveSettings() {
       firstRun = false;
       toggleWrap.classList.remove("hidden");
       settingsBtn.classList.remove("hidden");
-      sendBtn.classList.remove("hidden");
       closeSettingsBtn.classList.remove("hidden");
       setTimeout(() => showView(formView), 800);
     }
@@ -372,7 +320,7 @@ async function testConnection() {
 
 // ---------- View switching ----------
 function showView(view) {
-  [formView, loadingView, errorView, confirmView, companyResult, vesselResult, settingsView, ticketView, ticketSuccessView]
+  [formView, loadingView, errorView, confirmView, companyResult, vesselResult, settingsView]
     .forEach(v => v.classList.add("hidden"));
   view.classList.remove("hidden");
 }
@@ -438,8 +386,6 @@ async function runQCheck() {
 }
 
 async function callApi({ url, apiKey, body, onOk }) {
-  loadingText.textContent = "Running Q Check…";
-  loadingSub.textContent  = "This can take up to 90 seconds";
   showView(loadingView);
   try {
     const controller = new AbortController();
