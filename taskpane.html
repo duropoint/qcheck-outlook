@@ -145,6 +145,9 @@
           </div>
         </div>
 
+        <button class="escalate-btn full hidden" id="companyEscalateBtn">Send to Maritime Team</button>
+        <div class="zammad-status hidden" id="companyZammadStatus"></div>
+
         <button class="secondary-btn full" id="companyNewBtn">New Check</button>
       </div>
     </div>
@@ -186,6 +189,9 @@
           </div>
         </div>
 
+        <button class="escalate-btn full hidden" id="vesselEscalateBtn">Send to Maritime Team</button>
+        <div class="zammad-status hidden" id="vesselZammadStatus"></div>
+
         <button class="secondary-btn full" id="vesselNewBtn">New Check</button>
       </div>
     </div>
@@ -210,17 +216,9 @@
           <input type="password" id="companiesApiKey" placeholder="Paste your companies search API key" />
         </label>
 
-        <div class="settings-section-divider"></div>
-        <h4 class="settings-section-title">Send to Maritime Team</h4>
-
-        <label>
-          Zammad URL
-          <input type="text" id="zammadUrl" placeholder="https://your-zammad.example.com" />
-        </label>
-
         <label>
           Zammad Token
-          <input type="password" id="zammadToken" placeholder="Paste your Zammad personal access token" />
+          <input type="password" id="zammadTokenInput" placeholder="Paste your Zammad personal token" />
         </label>
 
         <div class="btn-row">
