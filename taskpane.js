@@ -5,6 +5,8 @@ const DEFAULT_API_BASE = "https://pscplatformalpha.onrender.com";
 const SETTING_API_BASE      = "qcheck_api_base";
 const SETTING_API_KEY       = "qcheck_api_key";
 const SETTING_COMPANIES_KEY = "qcheck_companies_key";
+const SETTING_ZAMMAD_URL    = "zammad_url";
+const SETTING_ZAMMAD_TOKEN  = "zammad_token";
 
 // ---------- DOM ----------
 const $ = (id) => document.getElementById(id);
@@ -37,18 +39,68 @@ const ismCollapseIcon   = $("ismCollapseIcon");
 const runBtn            = $("runBtn");
 const backToFormBtn     = $("backToForm");
 const settingsBtn       = $("settingsBtn");
+const sendBtn           = $("sendBtn");
 const closeSettingsBtn  = $("closeSettings");
 
 const apiBaseInput          = $("apiBase");
 const apiKeyInput           = $("apiKey");
 const companiesApiKeyInput  = $("companiesApiKey");
+const zammadUrlInput        = $("zammadUrl");
+const zammadTokenInput      = $("zammadToken");
 const saveBtn               = $("saveBtn");
 const testBtn               = $("testBtn");
 const settingsStatus        = $("settingsStatus");
 
+const ticketView          = $("ticketView");
+const ticketSuccessView   = $("ticketSuccessView");
+const loadingText         = $("loadingText");
+const loadingSub          = $("loadingSub");
+
 let mode          = "company";
 let firstRun      = false;
 let pendingQCheck = null;
+
+// ---------- Zammad category tree (hardcoded; mirrors Zammad admin config) ----------
+const CATEGORY_TREE = {
+  "Technical": {
+    "Hull & Structure":   ["Corrosion", "Cracks & Fractures", "Coating", "Other"],
+    "Main Engine":        ["Breakdown", "Performance Loss", "Maintenance", "Other"],
+    "Auxiliary Engine":   ["Breakdown", "Performance Loss", "Maintenance", "Other"],
+    "Navigation Systems": ["Radar", "GPS / GNSS", "AIS", "ECDIS", "Other"],
+    "Electrical":         ["Power Failure", "Lighting", "Switchboard", "Other"],
+    "Pumps & Piping":     ["Leakage", "Failure", "Maintenance", "Other"],
+    "Other":              []
+  },
+  "Operations": {
+    "Port State Control": ["Deficiency", "Detention", "Pre-Inspection", "Other"],
+    "Voyage":             ["Delay", "Deviation", "Weather Routing", "Other"],
+    "Cargo":              ["Damage", "Shortage", "Stowage Issue", "Other"],
+    "Bunkering":          ["Quality Issue", "Quantity Dispute", "Delay", "Other"],
+    "Other":              []
+  },
+  "Crew": {
+    "Manning":            ["Shortage", "Qualification Issue", "Crew Change", "Other"],
+    "Medical":            ["Illness", "Injury", "Medical Evacuation", "Other"],
+    "Training":           ["Certificate Renewal", "Drills", "Courses", "Other"],
+    "Other":              []
+  },
+  "Safety & Compliance": {
+    "ISM":                ["Non-conformity", "Audit", "Drill", "Other"],
+    "ISPS":               ["Security Alert", "Drill", "Audit", "Other"],
+    "MARPOL":             ["Pollution Incident", "Oil Record Book", "Garbage", "Other"],
+    "MLC":                ["Wages", "Rest Hours", "Accommodation", "Other"],
+    "Other":              []
+  },
+  "Commercial": {
+    "Charter Party":      ["Dispute", "Claim", "Amendment", "Other"],
+    "Hire & Freight":     ["Payment", "Dispute", "Off-hire", "Other"],
+    "Port Costs":         ["Invoice", "Dispute", "Disbursement Account", "Other"],
+    "Other":              []
+  },
+  "Other": {
+    "Other":              []
+  }
+};
 
 // ---------- Office.js init ----------
 Office.onReady(() => {
@@ -76,15 +128,19 @@ function initApp() {
     firstRun = true;
     toggleWrap.classList.add("hidden");
     settingsBtn.classList.add("hidden");
+    sendBtn.classList.add("hidden");
     closeSettingsBtn.classList.add("hidden");
     apiBaseInput.value         = getSetting(SETTING_API_BASE, DEFAULT_API_BASE);
     apiKeyInput.value          = getSetting(SETTING_API_KEY, "");
     companiesApiKeyInput.value = getSetting(SETTING_COMPANIES_KEY, "");
+    zammadUrlInput.value       = getSetting(SETTING_ZAMMAD_URL, "");
+    zammadTokenInput.value     = getSetting(SETTING_ZAMMAD_TOKEN, "");
     settingsStatus.textContent = "";
     settingsStatus.className   = "";
     showView(settingsView);
   } else {
     closeSettingsBtn.classList.remove("hidden");
+    sendBtn.classList.remove("hidden");
     showView(formView);
   }
 }
@@ -97,9 +153,15 @@ function bindEvents() {
   runBtn.addEventListener("click", runQCheck);
   backToFormBtn.addEventListener("click", () => showView(formView));
   settingsBtn.addEventListener("click", openSettings);
+  sendBtn.addEventListener("click", openTicketForm);
   closeSettingsBtn.addEventListener("click", () => showView(formView));
   saveBtn.addEventListener("click", saveSettings);
   testBtn.addEventListener("click", testConnection);
+  $("submitTicketBtn").addEventListener("click", submitTicket);
+  $("cancelTicketBtn").addEventListener("click", () => showView(formView));
+  $("ticketBackBtn").addEventListener("click", () => showView(formView));
+  $("ticketCatL1").addEventListener("change", updateCatL2);
+  $("ticketCatL2").addEventListener("change", updateCatL3);
   $("confirmProceedBtn").addEventListener("click", () => {
     if (pendingQCheck) { const fn = pendingQCheck; pendingQCheck = null; fn(); }
   });
@@ -184,6 +246,8 @@ function openSettings() {
   apiBaseInput.value         = getSetting(SETTING_API_BASE, DEFAULT_API_BASE);
   apiKeyInput.value          = getSetting(SETTING_API_KEY, "");
   companiesApiKeyInput.value = getSetting(SETTING_COMPANIES_KEY, "");
+  zammadUrlInput.value       = getSetting(SETTING_ZAMMAD_URL, "");
+  zammadTokenInput.value     = getSetting(SETTING_ZAMMAD_TOKEN, "");
   settingsStatus.textContent = "";
   settingsStatus.className   = "";
   showView(settingsView);
@@ -193,6 +257,8 @@ async function saveSettings() {
   const base         = apiBaseInput.value.trim();
   const key          = apiKeyInput.value.trim();
   const companiesKey = companiesApiKeyInput.value.trim();
+  const zUrl         = zammadUrlInput.value.trim();
+  const zToken       = zammadTokenInput.value.trim();
 
   if (!base) {
     settingsStatus.textContent = "Please enter the API Base URL.";
@@ -214,6 +280,8 @@ async function saveSettings() {
     await setSetting(SETTING_API_BASE, base.replace(/\/$/, ""));
     await setSetting(SETTING_API_KEY, key);
     await setSetting(SETTING_COMPANIES_KEY, companiesKey);
+    await setSetting(SETTING_ZAMMAD_URL, zUrl.replace(/\/$/, ""));
+    await setSetting(SETTING_ZAMMAD_TOKEN, zToken);
     settingsStatus.textContent = "Saved.";
     settingsStatus.className   = "status-msg ok";
 
@@ -221,6 +289,7 @@ async function saveSettings() {
       firstRun = false;
       toggleWrap.classList.remove("hidden");
       settingsBtn.classList.remove("hidden");
+      sendBtn.classList.remove("hidden");
       closeSettingsBtn.classList.remove("hidden");
       setTimeout(() => showView(formView), 800);
     }
@@ -280,7 +349,7 @@ async function testConnection() {
 
 // ---------- View switching ----------
 function showView(view) {
-  [formView, loadingView, errorView, confirmView, companyResult, vesselResult, settingsView]
+  [formView, loadingView, errorView, confirmView, companyResult, vesselResult, settingsView, ticketView, ticketSuccessView]
     .forEach(v => v.classList.add("hidden"));
   view.classList.remove("hidden");
 }
@@ -346,6 +415,8 @@ async function runQCheck() {
 }
 
 async function callApi({ url, apiKey, body, onOk }) {
+  loadingText.textContent = "Running Q Check…";
+  loadingSub.textContent  = "This can take up to 90 seconds";
   showView(loadingView);
   try {
     const controller = new AbortController();
@@ -596,4 +667,172 @@ function openUrl(url) {
   } catch (_) {
     Office.context.ui.openBrowserWindow(url);
   }
+}
+
+// ---------- Send to Maritime Team ----------
+
+function openTicketForm() {
+  const zUrl   = getSetting(SETTING_ZAMMAD_URL, "");
+  const zToken = getSetting(SETTING_ZAMMAD_TOKEN, "");
+  if (!zUrl || !zToken) {
+    openSettings();
+    settingsStatus.textContent = "Please configure Zammad URL and Token to use Send to Maritime Team.";
+    settingsStatus.className   = "status-msg error";
+    return;
+  }
+
+  $("ticketTitle").value      = "";
+  $("ticketText").value       = "";
+  $("ticketVesselName").value = mode === "vessel" ? vesselName.value.trim() : "";
+  $("ticketVesselImo").value  = mode === "vessel" ? vesselImo.value.trim()  : "";
+  $("ticketErrorMsg").textContent = "";
+  $("ticketErrorMsg").classList.add("hidden");
+  initCategorySelects();
+  showView(ticketView);
+}
+
+function initCategorySelects() {
+  const l1 = $("ticketCatL1");
+  l1.innerHTML = '<option value="">— Select category —</option>';
+  Object.keys(CATEGORY_TREE).forEach(key => {
+    const opt = document.createElement("option");
+    opt.value = key;
+    opt.textContent = key;
+    l1.appendChild(opt);
+  });
+  const l2wrap = $("catL2Wrap");
+  const l3wrap = $("catL3Wrap");
+  $("ticketCatL2").innerHTML = '<option value="">— Select sub-category —</option>';
+  $("ticketCatL3").innerHTML = '<option value="">— Select type —</option>';
+  l2wrap.classList.add("hidden");
+  l3wrap.classList.add("hidden");
+}
+
+function updateCatL2() {
+  const l1Val  = $("ticketCatL1").value;
+  const l2     = $("ticketCatL2");
+  const l2wrap = $("catL2Wrap");
+  const l3wrap = $("catL3Wrap");
+
+  l2.innerHTML = '<option value="">— Select sub-category —</option>';
+  $("ticketCatL3").innerHTML = '<option value="">— Select type —</option>';
+  l3wrap.classList.add("hidden");
+
+  if (!l1Val || !CATEGORY_TREE[l1Val]) {
+    l2wrap.classList.add("hidden");
+    return;
+  }
+
+  Object.keys(CATEGORY_TREE[l1Val]).forEach(key => {
+    const opt = document.createElement("option");
+    opt.value = key;
+    opt.textContent = key;
+    l2.appendChild(opt);
+  });
+  l2wrap.classList.remove("hidden");
+}
+
+function updateCatL3() {
+  const l1Val  = $("ticketCatL1").value;
+  const l2Val  = $("ticketCatL2").value;
+  const l3     = $("ticketCatL3");
+  const l3wrap = $("catL3Wrap");
+
+  l3.innerHTML = '<option value="">— Select type (optional) —</option>';
+  l3wrap.classList.add("hidden");
+
+  if (!l1Val || !l2Val) return;
+  const children = (CATEGORY_TREE[l1Val] || {})[l2Val];
+  if (!children || children.length === 0) return;
+
+  children.forEach(item => {
+    const opt = document.createElement("option");
+    opt.value = item;
+    opt.textContent = item;
+    l3.appendChild(opt);
+  });
+  l3wrap.classList.remove("hidden");
+}
+
+function showTicketError(msg) {
+  const el = $("ticketErrorMsg");
+  el.textContent = msg;
+  el.classList.remove("hidden");
+}
+
+async function submitTicket() {
+  const zUrl   = getSetting(SETTING_ZAMMAD_URL, "").replace(/\/$/, "");
+  const zToken = getSetting(SETTING_ZAMMAD_TOKEN, "");
+
+  const title  = $("ticketTitle").value.trim();
+  const text   = $("ticketText").value.trim();
+  const vName  = $("ticketVesselName").value.trim();
+  const vImo   = $("ticketVesselImo").value.trim();
+  const catL1  = $("ticketCatL1").value;
+  const catL2  = $("ticketCatL2").value;
+  const catL3  = $("ticketCatL3").value;
+
+  $("ticketErrorMsg").classList.add("hidden");
+
+  if (!title)  return showTicketError("Please enter a title.");
+  if (!text)   return showTicketError("Please enter a description.");
+  if (vImo && !isValidImo(vImo)) return showTicketError("Vessel IMO must be up to 7 digits.");
+  if (!catL1)  return showTicketError("Please select a category.");
+
+  const category = catL3 ? [catL1, catL2, catL3] : (catL2 ? [catL1, catL2] : [catL1]);
+
+  const customer = Office.context.mailbox.userProfile.emailAddress;
+
+  const body = {
+    title,
+    state:    "new",
+    group:    "Maritime Operations Department",
+    customer,
+    article:  { subject: title, body: text, type: "note", internal: false },
+    category
+  };
+  if (vName) body.vessel_name = vName;
+  if (vImo)  body.vessel_imo  = parseInt(vImo, 10);
+
+  loadingText.textContent = "Submitting ticket…";
+  loadingSub.textContent  = "Please wait";
+  showView(loadingView);
+
+  try {
+    const resp = await fetch(`${zUrl}/api/v1/tickets`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Token token=${zToken}` },
+      body:    JSON.stringify(body)
+    });
+
+    if (resp.status === 201) {
+      const data = await resp.json();
+      renderTicketSuccess(data);
+      return;
+    }
+
+    if (resp.status === 401) {
+      showView(ticketView);
+      showTicketError("Authentication failed (401). Please check your Zammad Token in Settings.");
+      return;
+    }
+
+    let errMsg = `HTTP ${resp.status}`;
+    try {
+      const j = await resp.json();
+      errMsg = j.error || (typeof j === "string" ? j : errMsg);
+    } catch (_) {
+      try { errMsg = await resp.text() || errMsg; } catch (_) {}
+    }
+    showView(ticketView);
+    showTicketError(errMsg);
+  } catch (err) {
+    showView(ticketView);
+    showTicketError(err.message || "Network error. Please check your connection.");
+  }
+}
+
+function renderTicketSuccess(data) {
+  $("ticketSuccessNumber").textContent = data.number || data.id || "–";
+  showView(ticketSuccessView);
 }
