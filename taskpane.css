@@ -617,13 +617,15 @@ input[type="text"]:focus, input[type="password"]:focus {
   border-radius: 8px;
   cursor: pointer;
   margin-top: 8px;
+  margin-bottom: 12px;
   transition: background 0.15s;
 }
 .escalate-btn:hover    { background: #78350f; }
 .escalate-btn:disabled { background: #94a3b8; cursor: not-allowed; }
 
 .zammad-status {
-  margin-top: 8px;
+  margin-top: -4px;
+  margin-bottom: 12px;
   padding: 8px 12px;
   border-radius: 6px;
   font-size: 13px;
