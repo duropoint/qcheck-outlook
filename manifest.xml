@@ -8,7 +8,7 @@
 
   <!-- ⚠️ Generate a new GUID at https://www.guidgen.com/ if you ever need to "force re-install" -->
   <Id>9c4e1a7b-3a2f-4d8c-b5d3-7e8f9a0c1d2e</Id>
-  <Version>1.0.0.2</Version>
+  <Version>1.0.0.3</Version>
   <ProviderName>EUROMAR</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="Q Check" />
