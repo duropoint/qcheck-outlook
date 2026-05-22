@@ -2,10 +2,11 @@
 
 const DEFAULT_API_BASE = "https://pscplatformalpha.onrender.com";
 
-const SETTING_API_BASE      = "qcheck_api_base";
-const SETTING_API_KEY       = "qcheck_api_key";
-const SETTING_COMPANIES_KEY = "qcheck_companies_key";
-const SETTING_ZAMMAD_TOKEN  = "qcheck_zammad_token";
+const SETTING_API_BASE        = "qcheck_api_base";
+const SETTING_API_KEY         = "qcheck_api_key";
+const SETTING_COMPANIES_KEY   = "qcheck_companies_key";
+const SETTING_ZAMMAD_PROXY    = "qcheck_zammad_proxy";
+const SETTING_ZAMMAD_TOKEN    = "qcheck_zammad_token";
 
 // ---------- DOM ----------
 const $ = (id) => document.getElementById(id);
@@ -43,6 +44,7 @@ const closeSettingsBtn  = $("closeSettings");
 const apiBaseInput          = $("apiBase");
 const apiKeyInput           = $("apiKey");
 const companiesApiKeyInput  = $("companiesApiKey");
+const zammadProxyInput      = $("zammadProxyInput");
 const zammadTokenInput      = $("zammadTokenInput");
 const saveBtn               = $("saveBtn");
 const testBtn               = $("testBtn");
@@ -77,9 +79,10 @@ function initApp() {
   const base         = getSetting(SETTING_API_BASE, "");
   const key          = getSetting(SETTING_API_KEY, "");
   const companiesKey = getSetting(SETTING_COMPANIES_KEY, "");
+  const proxyUrl     = getSetting(SETTING_ZAMMAD_PROXY, "");
   const zammadToken  = getSetting(SETTING_ZAMMAD_TOKEN, "");
 
-  if (!base || !key || !companiesKey || !zammadToken) {
+  if (!base || !key || !companiesKey || !proxyUrl || !zammadToken) {
     firstRun = true;
     toggleWrap.classList.add("hidden");
     settingsBtn.classList.add("hidden");
@@ -87,6 +90,7 @@ function initApp() {
     apiBaseInput.value         = getSetting(SETTING_API_BASE, DEFAULT_API_BASE);
     apiKeyInput.value          = getSetting(SETTING_API_KEY, "");
     companiesApiKeyInput.value = getSetting(SETTING_COMPANIES_KEY, "");
+    zammadProxyInput.value     = getSetting(SETTING_ZAMMAD_PROXY, "");
     zammadTokenInput.value     = getSetting(SETTING_ZAMMAD_TOKEN, "");
     settingsStatus.textContent = "";
     settingsStatus.className   = "";
@@ -198,6 +202,7 @@ function openSettings() {
   apiBaseInput.value         = getSetting(SETTING_API_BASE, DEFAULT_API_BASE);
   apiKeyInput.value          = getSetting(SETTING_API_KEY, "");
   companiesApiKeyInput.value = getSetting(SETTING_COMPANIES_KEY, "");
+  zammadProxyInput.value     = getSetting(SETTING_ZAMMAD_PROXY, "");
   zammadTokenInput.value     = getSetting(SETTING_ZAMMAD_TOKEN, "");
   settingsStatus.textContent = "";
   settingsStatus.className   = "";
@@ -208,6 +213,7 @@ async function saveSettings() {
   const base         = apiBaseInput.value.trim();
   const key          = apiKeyInput.value.trim();
   const companiesKey = companiesApiKeyInput.value.trim();
+  const proxyUrl     = zammadProxyInput.value.trim();
   const zammadToken  = zammadTokenInput.value.trim();
 
   if (!base) {
@@ -225,6 +231,11 @@ async function saveSettings() {
     settingsStatus.className   = "status-msg error";
     return;
   }
+  if (!proxyUrl) {
+    settingsStatus.textContent = "Please enter the Zammad Proxy URL.";
+    settingsStatus.className   = "status-msg error";
+    return;
+  }
   if (!zammadToken) {
     settingsStatus.textContent = "Please enter a Zammad token.";
     settingsStatus.className   = "status-msg error";
@@ -235,6 +246,7 @@ async function saveSettings() {
     await setSetting(SETTING_API_BASE, base.replace(/\/$/, ""));
     await setSetting(SETTING_API_KEY, key);
     await setSetting(SETTING_COMPANIES_KEY, companiesKey);
+    await setSetting(SETTING_ZAMMAD_PROXY, proxyUrl.replace(/\/$/, ""));
     await setSetting(SETTING_ZAMMAD_TOKEN, zammadToken);
     settingsStatus.textContent = "Saved.";
     settingsStatus.className   = "status-msg ok";
@@ -256,6 +268,7 @@ async function testConnection() {
   const base         = apiBaseInput.value.trim().replace(/\/$/, "") || DEFAULT_API_BASE;
   const key          = apiKeyInput.value.trim();
   const companiesKey = companiesApiKeyInput.value.trim();
+  const proxyUrl     = zammadProxyInput.value.trim().replace(/\/$/, "");
   const zammadToken  = zammadTokenInput.value.trim();
 
   settingsStatus.textContent = "Testing…";
@@ -296,16 +309,16 @@ async function testConnection() {
     }
   }
 
-  // Test Zammad proxy
-  if (!key || !zammadToken) {
-    lines.push("Zammad proxy: API key and Zammad token required");
+  // Test Zammad proxy (Cloudflare Worker)
+  if (!proxyUrl || !zammadToken) {
+    lines.push("Zammad proxy: proxy URL and Zammad token required");
   } else {
     try {
-      const resp = await fetch(`${base}/api/zammad/groups`, {
-        headers: { "X-API-Key": key, "X-Zammad-Token": zammadToken }
+      const resp = await fetch(`${proxyUrl}/groups`, {
+        headers: { "X-Zammad-Token": zammadToken }
       });
       if (resp.status === 401)      lines.push("Zammad proxy: Zammad token rejected (401)");
-      else if (resp.status === 404) lines.push("Zammad proxy: endpoint not found — proxy not yet deployed on server");
+      else if (resp.status === 404) lines.push("Zammad proxy: endpoint not found — check Worker URL");
       else if (!resp.ok)            lines.push(`Zammad proxy: error (${resp.status})`);
       else                          lines.push(`Zammad proxy: OK (${resp.status}) ✓`);
     } catch {
@@ -728,8 +741,15 @@ function buildZammadDescription(d) {
 }
 
 async function submitZammadTicket(btnEl, statusEl) {
-  const { apiBase, apiKey } = getConfig();
+  const proxyUrl    = getSetting(SETTING_ZAMMAD_PROXY, "").replace(/\/$/, "");
   const zammadToken = getSetting(SETTING_ZAMMAD_TOKEN, "");
+
+  if (!proxyUrl || !zammadToken) {
+    statusEl.textContent = "Zammad proxy URL or token not configured — open Settings.";
+    statusEl.className   = "zammad-status error";
+    statusEl.classList.remove("hidden");
+    return;
+  }
 
   const d         = lastResultData;
   const title     = buildZammadTitle(d);
@@ -755,12 +775,11 @@ async function submitZammadTicket(btnEl, statusEl) {
   statusEl.classList.add("hidden");
 
   try {
-    const resp = await fetch(`${apiBase}/api/zammad/tickets`, {
+    const resp = await fetch(`${proxyUrl}/tickets`, {
       method:  "POST",
       headers: {
-        "Content-Type":    "application/json",
-        "X-API-Key":       apiKey,
-        "X-Zammad-Token":  zammadToken
+        "Content-Type":   "application/json",
+        "X-Zammad-Token": zammadToken
       },
       body: JSON.stringify(ticket)
     });
