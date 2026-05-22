@@ -46,8 +46,8 @@ const saveBtn               = $("saveBtn");
 const testBtn               = $("testBtn");
 const settingsStatus        = $("settingsStatus");
 
-let mode         = "company";
-let firstRun     = false;
+let mode          = "company";
+let firstRun      = false;
 let pendingQCheck = null;
 
 // ---------- Office.js init ----------
@@ -58,24 +58,32 @@ Office.onReady(() => {
   setupAutocomplete({ inputEl: companyName,       pairedEl: companyImo,        searchParam: "name", dropdownEl: $("companyNameDropdown") });
   setupAutocomplete({ inputEl: vesselCompanyImo,  pairedEl: vesselCompanyName, searchParam: "imo",  dropdownEl: $("vesselCompanyImoDropdown") });
   setupAutocomplete({ inputEl: vesselCompanyName, pairedEl: vesselCompanyImo,  searchParam: "name", dropdownEl: $("vesselCompanyNameDropdown") });
+  // Paste buttons
+  document.querySelectorAll(".paste-btn").forEach(btn => {
+    btn.addEventListener("mousedown", e => e.preventDefault()); // keep input focused
+    btn.addEventListener("click", () => handlePaste($(btn.dataset.target)));
+  });
 });
 
 // ---------- App init ----------
+// Gate: all three settings (URL + both keys) must be saved before accessing the app.
 function initApp() {
-  const key = getSetting(SETTING_API_KEY, "");
-  if (!key) {
+  const base         = getSetting(SETTING_API_BASE, "");
+  const key          = getSetting(SETTING_API_KEY, "");
+  const companiesKey = getSetting(SETTING_COMPANIES_KEY, "");
+
+  if (!base || !key || !companiesKey) {
     firstRun = true;
     toggleWrap.classList.add("hidden");
     settingsBtn.classList.add("hidden");
     closeSettingsBtn.classList.add("hidden");
     apiBaseInput.value         = getSetting(SETTING_API_BASE, DEFAULT_API_BASE);
-    apiKeyInput.value          = "";
-    companiesApiKeyInput.value = "";
+    apiKeyInput.value          = getSetting(SETTING_API_KEY, "");
+    companiesApiKeyInput.value = getSetting(SETTING_COMPANIES_KEY, "");
     settingsStatus.textContent = "";
     settingsStatus.className   = "";
     showView(settingsView);
   } else {
-    // ensure Back button is visible for returning users
     closeSettingsBtn.classList.remove("hidden");
     showView(formView);
   }
@@ -99,6 +107,21 @@ function bindEvents() {
     pendingQCheck = null;
     showView(formView);
   });
+}
+
+// ---------- Paste helper ----------
+async function handlePaste(inputEl) {
+  if (!inputEl) return;
+  try {
+    const text = await navigator.clipboard.readText();
+    if (text) {
+      inputEl.value = text.trim();
+      inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  } catch (_) {
+    // Clipboard access denied — focus the field so user can paste with keyboard
+  }
+  inputEl.focus();
 }
 
 // ---------- ISM Company collapse ----------
@@ -167,18 +190,28 @@ function openSettings() {
 }
 
 async function saveSettings() {
-  const base         = (apiBaseInput.value.trim() || DEFAULT_API_BASE).replace(/\/$/, "");
+  const base         = apiBaseInput.value.trim();
   const key          = apiKeyInput.value.trim();
   const companiesKey = companiesApiKeyInput.value.trim();
 
+  if (!base) {
+    settingsStatus.textContent = "Please enter the API Base URL.";
+    settingsStatus.className   = "status-msg error";
+    return;
+  }
   if (!key) {
     settingsStatus.textContent = "Please enter a Q Check API key.";
     settingsStatus.className   = "status-msg error";
     return;
   }
+  if (!companiesKey) {
+    settingsStatus.textContent = "Please enter a Companies Search key.";
+    settingsStatus.className   = "status-msg error";
+    return;
+  }
 
   try {
-    await setSetting(SETTING_API_BASE, base);
+    await setSetting(SETTING_API_BASE, base.replace(/\/$/, ""));
     await setSetting(SETTING_API_KEY, key);
     await setSetting(SETTING_COMPANIES_KEY, companiesKey);
     settingsStatus.textContent = "Saved.";
@@ -198,36 +231,51 @@ async function saveSettings() {
 }
 
 async function testConnection() {
-  const base = (apiBaseInput.value.trim() || DEFAULT_API_BASE).replace(/\/$/, "");
-  const key  = apiKeyInput.value.trim();
-  if (!key) {
-    settingsStatus.textContent = "Please enter a Q Check API key first.";
-    settingsStatus.className   = "status-msg error";
-    return;
-  }
+  const base         = apiBaseInput.value.trim().replace(/\/$/, "") || DEFAULT_API_BASE;
+  const key          = apiKeyInput.value.trim();
+  const companiesKey = companiesApiKeyInput.value.trim();
+
   settingsStatus.textContent = "Testing…";
   settingsStatus.className   = "status-msg";
 
-  try {
-    const resp = await fetch(`${base}/api/v1/qcheck/company`, {
-      method:  "POST",
-      headers: { "Content-Type": "application/json", "X-API-Key": key },
-      body:    JSON.stringify({ company_imo: "" })
-    });
-    if (resp.status === 401) {
-      settingsStatus.textContent = "API key rejected (401). Check the key.";
-      settingsStatus.className   = "status-msg error";
-    } else if (resp.status === 503) {
-      settingsStatus.textContent = "Server not configured (503). Ask admin to set Q_CHECK_API_KEY on Render.";
-      settingsStatus.className   = "status-msg error";
-    } else {
-      settingsStatus.textContent = `Connection OK (server responded ${resp.status}).`;
-      settingsStatus.className   = "status-msg ok";
+  const lines = [];
+
+  // Test Q Check API
+  if (!key) {
+    lines.push("Q Check API: no key entered");
+  } else {
+    try {
+      const resp = await fetch(`${base}/api/v1/qcheck/company`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", "X-API-Key": key },
+        body:    JSON.stringify({ company_imo: "" })
+      });
+      if (resp.status === 401)      lines.push("Q Check API: key rejected (401)");
+      else if (resp.status === 503) lines.push("Q Check API: server not configured (503)");
+      else                          lines.push(`Q Check API: OK (${resp.status}) ✓`);
+    } catch {
+      lines.push("Q Check API: connection failed");
     }
-  } catch (err) {
-    settingsStatus.textContent = "Connection failed: " + (err.message || "network error");
-    settingsStatus.className   = "status-msg error";
   }
+
+  // Test Companies Search API
+  if (!companiesKey) {
+    lines.push("Companies API: no key entered");
+  } else {
+    try {
+      const resp = await fetch(`${base}/api/companies/search?imo=0000001`, {
+        headers: { "X-API-Key": companiesKey }
+      });
+      if (resp.status === 401) lines.push("Companies API: key rejected (401)");
+      else                     lines.push(`Companies API: OK (${resp.status}) ✓`);
+    } catch {
+      lines.push("Companies API: connection failed");
+    }
+  }
+
+  const hasError = lines.some(l => !l.includes("✓") && !l.includes("no key"));
+  settingsStatus.innerHTML = lines.join("<br>");
+  settingsStatus.className = "status-msg " + (hasError ? "error" : "ok");
 }
 
 // ---------- View switching ----------
@@ -242,7 +290,6 @@ function isValidImo(v) {
   return /^\d{1,7}$/.test((v || "").trim());
 }
 
-// Normalize IMO for comparison (strip leading zeros)
 function isSameImo(a, b) {
   return parseInt(a || 0, 10) === parseInt(b || 0, 10) && parseInt(a || 0, 10) !== 0;
 }
@@ -266,11 +313,9 @@ async function runQCheck() {
       onOk: (data) => renderCompanyResult({ imo, name, data })
     });
 
-    // Check if company already exists in the database
     if (getSetting(SETTING_COMPANIES_KEY, "")) {
       const results = await searchCompanies({ imo });
-      const found   = results.find(r => isSameImo(r.company_imo, imo));
-      if (found) {
+      if (results.find(r => isSameImo(r.company_imo, imo))) {
         pendingQCheck = proceed;
         showView(confirmView);
         return;
@@ -332,20 +377,15 @@ function showError(message) {
 }
 
 // ---------- Colour mapping ----------
-// Handles both performance-style ("High/Low/Very Low Performance") and
-// assessment-style ("Acceptable", "Review Needed", "Not Acceptable") values.
 function colorClass(v) {
   if (!v) return "amber";
   const s = v.toLowerCase();
-  // Red — check most specific first
   if (s.includes("not acceptable")) return "red";
   if (s.includes("very low"))       return "red";
-  // Amber
   if (s.includes("review"))         return "amber";
-  if (s.includes("low"))            return "amber";   // "Low Performance" (not "Very Low")
-  // Green
-  if (s.includes("high"))           return "green";   // "High Performance"
-  if (s.includes("acceptable"))     return "green";   // "Acceptable"
+  if (s.includes("low"))            return "amber";
+  if (s.includes("high"))           return "green";
+  if (s.includes("acceptable"))     return "green";
   return "amber";
 }
 
@@ -507,7 +547,7 @@ function setupAutocomplete({ inputEl, pairedEl, searchParam, dropdownEl }) {
     if (!hasExact) {
       const footer = document.createElement("div");
       footer.className = "ts-option-create";
-      footer.innerHTML = `No exact match — press <kbd>Enter</kbd> to use “${escHtml(q)}” as-is`;
+      footer.innerHTML = `No exact match — press <kbd>Enter</kbd> to use "${escHtml(q)}" as-is`;
       dropdownEl.appendChild(footer);
     }
 
