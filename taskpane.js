@@ -674,9 +674,9 @@ function openUrl(url) {
 
 function buildZammadTitle(d) {
   if (d.mode === "company") {
-    return `Q Check Review Required : Company${d.name ? " '" + d.name : "'"} '${d.imo}'`;
+    return `Q Check Review Required : Company${d.name ? " '" + d.name : ""}' '${d.imo}'`;
   }
-  return `Q Check Review Required : Vessel${d.vNm ? " '" + d.vNm : "'"} '${d.vImo}'`;
+  return `Q Check Review Required : Vessel${d.vNm ? " '" + d.vNm : ""}' '${d.vImo}'`;
 }
 
 function buildZammadDescription(d) {
@@ -692,12 +692,12 @@ function buildZammadDescription(d) {
       "",
       "Please note that the below Company requires a further Review on the Eligibility to MAR before we proceed further.",
       "",
-      `Company IMO Number : ${d.imo}`,
-      `Company Name : ${d.name || "Unknown"}`,
+      `**Company IMO Number** : ${d.imo}`,
+      `**Company Name** : ${d.name || "Unknown"}`,
       "",
-      `Global Assessment : ${global}`,
+      `**Global Assessment** : ${global}`,
       "",
-      `Report Link : ${url}`,
+      `**Report Link** : ${url}`,
       "",
       "Thank you,",
       userName,
@@ -713,20 +713,20 @@ function buildZammadDescription(d) {
     "",
     "Please note that the below Vessel requires a further Review on the Eligibility to MAR before we proceed further.",
     "",
-    `Vessel IMO Number : ${d.vImo}`,
-    `Vessel Name : ${d.vNm || "Unknown"}`
+    `**Vessel IMO Number** : ${d.vImo}`,
+    `**Vessel Name** : ${d.vNm || "Unknown"}`
   ];
-  if (d.cImo) lines.push(`Company IMO Number : ${d.cImo}`);
-  if (d.cNm)  lines.push(`Company Name : ${d.cNm}`);
+  if (d.cImo) lines.push(`**Company IMO Number** : ${d.cImo}`);
+  if (d.cNm)  lines.push(`**Company Name** : ${d.cNm}`);
   lines.push(
     "",
-    `Global Assessment : ${global}`,
+    `**Global Assessment** : ${global}`,
     "",
-    `Age Criteria : ${a.age     || "Unknown"}`,
-    `PSC Performance : ${a.psc  || "Unknown"}`,
-    `Company Status : ${a.company || "Unknown"}`,
+    `**Age Criteria** : ${a.age     || "Unknown"}`,
+    `**PSC Performance** : ${a.psc  || "Unknown"}`,
+    `**Company Status** : ${a.company || "Unknown"}`,
     "",
-    `Report Link : ${url}`,
+    `**Report Link** : ${url}`,
     "",
     "Thank you,",
     userName,
