@@ -684,9 +684,9 @@ function openUrl(url) {
 
 function buildZammadTitle(d) {
   if (d.mode === "company") {
-    return `Q Check Review Required : Company${d.name ? " " + d.name : ""} ${d.imo}`;
+    return `Q Check Review Required : Company${d.name ? " '" + d.name : "'"} '${d.imo}'`;
   }
-  return `Q Check Review Required : Vessel${d.vNm ? " " + d.vNm : ""} ${d.vImo}`;
+  return `Q Check Review Required : Vessel${d.vNm ? " '" + d.vNm : "'"} '${d.vImo}'`;
 }
 
 function buildZammadDescription(d) {
@@ -701,10 +701,12 @@ function buildZammadDescription(d) {
       "Dear colleagues,",
       "",
       "Please note that the below Company requires a further Review on the Eligibility to MAR before we proceed further.",
+      "",
       `Company IMO Number : ${d.imo}`,
       `Company Name : ${d.name || "Unknown"}`,
       "",
       `Global Assessment : ${global}`,
+      "",
       `Report Link : ${url}`,
       "",
       "Thank you,",
@@ -720,6 +722,7 @@ function buildZammadDescription(d) {
     "Dear colleagues,",
     "",
     "Please note that the below Vessel requires a further Review on the Eligibility to MAR before we proceed further.",
+    "",
     `Vessel IMO Number : ${d.vImo}`,
     `Vessel Name : ${d.vNm || "Unknown"}`
   ];
@@ -728,9 +731,11 @@ function buildZammadDescription(d) {
   lines.push(
     "",
     `Global Assessment : ${global}`,
+    "",
     `Age Criteria : ${a.age     || "Unknown"}`,
     `PSC Performance : ${a.psc  || "Unknown"}`,
     `Company Status : ${a.company || "Unknown"}`,
+    "",
     `Report Link : ${url}`,
     "",
     "Thank you,",
@@ -762,7 +767,7 @@ async function submitZammadTicket(btnEl, statusEl) {
     group:    "Maritime Operations Department",
     customer: userEmail,
     article:  { subject: title, body, type: "note", internal: false },
-    category: ["Maritime Department", "Registrations / Deletions", "New Registrations"]
+    category: ["Maritime Department::Registrations / Deletions::New Registrations"]
   };
 
   if (d.mode === "vessel") {
