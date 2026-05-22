@@ -405,29 +405,47 @@ input[type="text"]:focus, input[type="password"]:focus {
 }
 .settings-btn:hover { opacity: 1; }
 
-.selection-row {
-  padding: 12px 18px 0;
+/* ---------- ISM Company collapsible ---------- */
+.ism-collapse-header {
+  margin-top: 4px;
+}
+
+.ism-collapse-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.ism-collapse-btn:hover {
+  background: #e2e8f0;
+}
+
+.ism-collapse-icon {
+  font-size: 10px;
+  color: #64748b;
   flex-shrink: 0;
 }
 
-.selection-btn {
-  width: 100%;
-  background: #fef3c7;
-  border: 1px dashed #d97706;
-  color: #92400e;
-  padding: 8px 12px;
-  font-size: 12px;
-  font-weight: 600;
+.ism-collapse-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
   border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.selection-btn:hover {
-  background: #fde68a;
-}
-.selection-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .settings-title {

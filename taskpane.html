@@ -16,16 +16,9 @@
     </div>
 
     <!-- Toggle -->
-    <div class="toggle-wrap">
+    <div class="toggle-wrap" id="toggleWrap">
       <button class="toggle-btn active" data-mode="company" id="toggleCompany">Company</button>
       <button class="toggle-btn" data-mode="vessel" id="toggleVessel">Vessel</button>
-    </div>
-
-    <!-- "Use selected text" helper -->
-    <div class="selection-row">
-      <button class="selection-btn" id="useSelectionBtn">
-        ⬇ Use selected text from email
-      </button>
     </div>
 
     <!-- Form -->
@@ -48,17 +41,26 @@
             <input type="text" id="vesselImo" placeholder="7-digit IMO" />
           </label>
           <label>
-            Company IMO <span class="req">*</span>
-            <input type="text" id="vesselCompanyImo" placeholder="7-digit IMO" />
-          </label>
-          <label>
             Vessel Name <span class="opt">(optional)</span>
             <input type="text" id="vesselName" placeholder="e.g. MV EXAMPLE" />
           </label>
-          <label>
-            Company Name <span class="opt">(optional)</span>
-            <input type="text" id="vesselCompanyName" placeholder="ISM company name" />
-          </label>
+
+          <div class="ism-collapse-header">
+            <button class="ism-collapse-btn" id="ismCollapseBtn" type="button">
+              <span class="ism-collapse-icon" id="ismCollapseIcon">▶</span>
+              ISM Company <span class="opt">(optional)</span>
+            </button>
+          </div>
+          <div class="ism-collapse-body hidden" id="ismCollapseBody">
+            <label>
+              Company IMO <span class="opt">(optional)</span>
+              <input type="text" id="vesselCompanyImo" placeholder="7-digit IMO" />
+            </label>
+            <label>
+              Company Name <span class="opt">(optional)</span>
+              <input type="text" id="vesselCompanyName" placeholder="ISM company name" />
+            </label>
+          </div>
         </div>
 
         <button class="run-btn" id="runBtn">Run Q Check</button>
@@ -171,7 +173,7 @@
 
         <div id="settingsStatus"></div>
 
-        <button class="secondary-btn full" id="closeSettings" style="margin-top: 16px;">Back</button>
+        <button class="secondary-btn full hidden" id="closeSettings" style="margin-top: 16px;">Back</button>
       </div>
     </div>
   </div>
