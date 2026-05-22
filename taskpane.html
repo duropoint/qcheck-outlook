@@ -27,11 +27,17 @@
         <div class="field-group" id="companyFields">
           <label>
             Company IMO <span class="req">*</span>
-            <input type="text" id="companyImo" placeholder="7-digit IMO" />
+            <div class="ts-wrap">
+              <input type="text" id="companyImo" placeholder="Search by IMO…" autocomplete="off" />
+              <div class="ts-dropdown hidden" id="companyImoDropdown"></div>
+            </div>
           </label>
           <label>
             Company Name <span class="opt">(optional)</span>
-            <input type="text" id="companyName" placeholder="e.g. EUROMAR SHIP MANAGEMENT" />
+            <div class="ts-wrap">
+              <input type="text" id="companyName" placeholder="Search by name…" autocomplete="off" />
+              <div class="ts-dropdown hidden" id="companyNameDropdown"></div>
+            </div>
           </label>
         </div>
 
@@ -53,12 +59,18 @@
           </div>
           <div class="ism-collapse-body hidden" id="ismCollapseBody">
             <label>
-              Company IMO <span class="opt">(optional)</span>
-              <input type="text" id="vesselCompanyImo" placeholder="7-digit IMO" />
+              Company IMO
+              <div class="ts-wrap">
+                <input type="text" id="vesselCompanyImo" placeholder="Search by IMO…" autocomplete="off" />
+                <div class="ts-dropdown hidden" id="vesselCompanyImoDropdown"></div>
+              </div>
             </label>
             <label>
-              Company Name <span class="opt">(optional)</span>
-              <input type="text" id="vesselCompanyName" placeholder="ISM company name" />
+              Company Name
+              <div class="ts-wrap">
+                <input type="text" id="vesselCompanyName" placeholder="Search by name…" autocomplete="off" />
+                <div class="ts-dropdown hidden" id="vesselCompanyNameDropdown"></div>
+              </div>
             </label>
           </div>
         </div>
@@ -162,8 +174,13 @@
         </label>
 
         <label>
-          API Key
+          Q Check API Key
           <input type="password" id="apiKey" placeholder="Paste your Q_CHECK_API_KEY" />
+        </label>
+
+        <label>
+          Companies Search Key
+          <input type="password" id="companiesApiKey" placeholder="Paste your companies search API key" />
         </label>
 
         <div class="btn-row">
