@@ -26,14 +26,14 @@
       <div class="view-body">
         <div class="field-group" id="companyFields">
           <label>
-            Company IMO <span class="req">*</span>
+            <span>Company IMO <span class="req">*</span></span>
             <div class="ts-wrap">
               <input type="text" id="companyImo" placeholder="Search by IMO…" autocomplete="off" />
               <div class="ts-dropdown hidden" id="companyImoDropdown"></div>
             </div>
           </label>
           <label>
-            Company Name <span class="opt">(optional)</span>
+            <span>Company Name <span class="opt">(optional)</span></span>
             <div class="ts-wrap">
               <input type="text" id="companyName" placeholder="Search by name…" autocomplete="off" />
               <div class="ts-dropdown hidden" id="companyNameDropdown"></div>
@@ -43,11 +43,11 @@
 
         <div class="field-group hidden" id="vesselFields">
           <label>
-            Vessel IMO <span class="req">*</span>
+            <span>Vessel IMO <span class="req">*</span></span>
             <input type="text" id="vesselImo" placeholder="7-digit IMO" />
           </label>
           <label>
-            Vessel Name <span class="opt">(optional)</span>
+            <span>Vessel Name <span class="opt">(optional)</span></span>
             <input type="text" id="vesselName" placeholder="e.g. MV EXAMPLE" />
           </label>
 
@@ -59,14 +59,14 @@
           </div>
           <div class="ism-collapse-body hidden" id="ismCollapseBody">
             <label>
-              Company IMO
+              <span>Company IMO</span>
               <div class="ts-wrap">
                 <input type="text" id="vesselCompanyImo" placeholder="Search by IMO…" autocomplete="off" />
                 <div class="ts-dropdown hidden" id="vesselCompanyImoDropdown"></div>
               </div>
             </label>
             <label>
-              Company Name
+              <span>Company Name</span>
               <div class="ts-wrap">
                 <input type="text" id="vesselCompanyName" placeholder="Search by name…" autocomplete="off" />
                 <div class="ts-dropdown hidden" id="vesselCompanyNameDropdown"></div>
@@ -97,6 +97,21 @@
       <div class="view-body">
         <div class="error-box" id="errorMsg"></div>
         <button class="secondary-btn full" id="backToForm">Back</button>
+      </div>
+    </div>
+
+    <!-- Company already-in-DB confirmation -->
+    <div class="view hidden" id="confirmView">
+      <div class="view-body">
+        <div class="confirm-box">
+          <div class="confirm-icon">ℹ</div>
+          <p class="confirm-msg">This company already manages vessels with Portugal / Madeira and is therefore accepted.</p>
+          <p class="confirm-question">Do you still want to proceed with the Q Check?</p>
+        </div>
+        <div class="confirm-actions">
+          <button class="secondary-btn" id="confirmCancelBtn">Back</button>
+          <button class="run-btn confirm-proceed-btn" id="confirmProceedBtn">Yes, Proceed</button>
+        </div>
       </div>
     </div>
 
@@ -190,7 +205,7 @@
 
         <div id="settingsStatus"></div>
 
-        <button class="secondary-btn full hidden" id="closeSettings" style="margin-top: 16px;">Back</button>
+        <button class="secondary-btn full" id="closeSettings" style="margin-top: 16px;">Back</button>
       </div>
     </div>
   </div>
