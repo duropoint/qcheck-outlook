@@ -1,7 +1,6 @@
 // Q Check — Outlook task pane logic
 
 const DEFAULT_API_BASE = "https://pscplatformalpha.onrender.com";
-const ZAMMAD_URL       = "https://euromar.zammad.com";
 
 const SETTING_API_BASE      = "qcheck_api_base";
 const SETTING_API_KEY       = "qcheck_api_key";
@@ -257,6 +256,7 @@ async function testConnection() {
   const base         = apiBaseInput.value.trim().replace(/\/$/, "") || DEFAULT_API_BASE;
   const key          = apiKeyInput.value.trim();
   const companiesKey = companiesApiKeyInput.value.trim();
+  const zammadToken  = zammadTokenInput.value.trim();
 
   settingsStatus.textContent = "Testing…";
   settingsStatus.className   = "status-msg";
@@ -296,7 +296,24 @@ async function testConnection() {
     }
   }
 
-  const hasError = lines.some(l => !l.includes("✓") && !l.includes("no key"));
+  // Test Zammad proxy
+  if (!key || !zammadToken) {
+    lines.push("Zammad proxy: API key and Zammad token required");
+  } else {
+    try {
+      const resp = await fetch(`${base}/api/zammad/groups`, {
+        headers: { "X-API-Key": key, "X-Zammad-Token": zammadToken }
+      });
+      if (resp.status === 401)      lines.push("Zammad proxy: Zammad token rejected (401)");
+      else if (resp.status === 404) lines.push("Zammad proxy: endpoint not found — proxy not yet deployed on server");
+      else if (!resp.ok)            lines.push(`Zammad proxy: error (${resp.status})`);
+      else                          lines.push(`Zammad proxy: OK (${resp.status}) ✓`);
+    } catch {
+      lines.push("Zammad proxy: connection failed");
+    }
+  }
+
+  const hasError = lines.some(l => !l.includes("✓") && !l.includes("no key") && !l.includes("required"));
   settingsStatus.innerHTML = lines.join("<br>");
   settingsStatus.className = "status-msg " + (hasError ? "error" : "ok");
 }
@@ -654,9 +671,9 @@ function openUrl(url) {
 
 function buildZammadTitle(d) {
   if (d.mode === "company") {
-    return `Q Check Review Required : Company ${d.name || d.imo} ${d.imo}`;
+    return `Q Check Review Required : Company${d.name ? " " + d.name : ""} ${d.imo}`;
   }
-  return `Q Check Review Required : Vessel ${d.vNm || d.vImo} ${d.vImo}`;
+  return `Q Check Review Required : Vessel${d.vNm ? " " + d.vNm : ""} ${d.vImo}`;
 }
 
 function buildZammadDescription(d) {
@@ -711,13 +728,8 @@ function buildZammadDescription(d) {
 }
 
 async function submitZammadTicket(btnEl, statusEl) {
-  const token = getSetting(SETTING_ZAMMAD_TOKEN, "");
-  if (!token) {
-    statusEl.textContent = "Zammad token not configured. Please check Settings.";
-    statusEl.className   = "zammad-status error";
-    statusEl.classList.remove("hidden");
-    return;
-  }
+  const { apiBase, apiKey } = getConfig();
+  const zammadToken = getSetting(SETTING_ZAMMAD_TOKEN, "");
 
   const d         = lastResultData;
   const title     = buildZammadTitle(d);
@@ -743,10 +755,14 @@ async function submitZammadTicket(btnEl, statusEl) {
   statusEl.classList.add("hidden");
 
   try {
-    const resp = await fetch(`${ZAMMAD_URL}/api/v1/tickets`, {
+    const resp = await fetch(`${apiBase}/api/zammad/tickets`, {
       method:  "POST",
-      headers: { "Authorization": `Token token=${token}`, "Content-Type": "application/json" },
-      body:    JSON.stringify(ticket)
+      headers: {
+        "Content-Type":    "application/json",
+        "X-API-Key":       apiKey,
+        "X-Zammad-Token":  zammadToken
+      },
+      body: JSON.stringify(ticket)
     });
 
     if (resp.status === 201) {
@@ -759,7 +775,7 @@ async function submitZammadTicket(btnEl, statusEl) {
     } else if (resp.status === 401) {
       btnEl.disabled       = false;
       btnEl.textContent    = "Send to Maritime Team";
-      statusEl.textContent = "Authentication failed (401). Update your Zammad token in Settings.";
+      statusEl.textContent = "Authentication failed (401). Check your Zammad token in Settings.";
       statusEl.className   = "zammad-status error";
       statusEl.classList.remove("hidden");
     } else {
