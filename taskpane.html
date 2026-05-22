@@ -29,6 +29,7 @@
             <span>Company IMO <span class="req">*</span></span>
             <div class="ts-wrap">
               <input type="text" id="companyImo" placeholder="Search by IMO…" autocomplete="off" />
+              <button class="paste-btn" type="button" data-target="companyImo">Paste</button>
               <div class="ts-dropdown hidden" id="companyImoDropdown"></div>
             </div>
           </label>
@@ -36,6 +37,7 @@
             <span>Company Name <span class="opt">(optional)</span></span>
             <div class="ts-wrap">
               <input type="text" id="companyName" placeholder="Search by name…" autocomplete="off" />
+              <button class="paste-btn" type="button" data-target="companyName">Paste</button>
               <div class="ts-dropdown hidden" id="companyNameDropdown"></div>
             </div>
           </label>
@@ -44,11 +46,17 @@
         <div class="field-group hidden" id="vesselFields">
           <label>
             <span>Vessel IMO <span class="req">*</span></span>
-            <input type="text" id="vesselImo" placeholder="7-digit IMO" />
+            <div class="input-wrap">
+              <input type="text" id="vesselImo" placeholder="7-digit IMO" />
+              <button class="paste-btn" type="button" data-target="vesselImo">Paste</button>
+            </div>
           </label>
           <label>
             <span>Vessel Name <span class="opt">(optional)</span></span>
-            <input type="text" id="vesselName" placeholder="e.g. MV EXAMPLE" />
+            <div class="input-wrap">
+              <input type="text" id="vesselName" placeholder="e.g. MV EXAMPLE" />
+              <button class="paste-btn" type="button" data-target="vesselName">Paste</button>
+            </div>
           </label>
 
           <div class="ism-collapse-header">
@@ -62,6 +70,7 @@
               <span>Company IMO</span>
               <div class="ts-wrap">
                 <input type="text" id="vesselCompanyImo" placeholder="Search by IMO…" autocomplete="off" />
+                <button class="paste-btn" type="button" data-target="vesselCompanyImo">Paste</button>
                 <div class="ts-dropdown hidden" id="vesselCompanyImoDropdown"></div>
               </div>
             </label>
@@ -69,6 +78,7 @@
               <span>Company Name</span>
               <div class="ts-wrap">
                 <input type="text" id="vesselCompanyName" placeholder="Search by name…" autocomplete="off" />
+                <button class="paste-btn" type="button" data-target="vesselCompanyName">Paste</button>
                 <div class="ts-dropdown hidden" id="vesselCompanyNameDropdown"></div>
               </div>
             </label>
@@ -104,7 +114,6 @@
     <div class="view hidden" id="confirmView">
       <div class="view-body">
         <div class="confirm-box">
-          <div class="confirm-icon">ℹ</div>
           <p class="confirm-msg">This company already manages vessels with Portugal / Madeira and is therefore accepted.</p>
           <p class="confirm-question">Do you still want to proceed with the Q Check?</p>
         </div>
@@ -200,7 +209,7 @@
 
         <div class="btn-row">
           <button class="run-btn" id="saveBtn" style="flex:1;">Save</button>
-          <button class="secondary-btn" id="testBtn" style="flex:0 0 auto; padding:12px 16px;">Test</button>
+          <button class="secondary-btn" id="testBtn" style="flex:0 0 auto; padding:12px 16px;">Test APIs</button>
         </div>
 
         <div id="settingsStatus"></div>
