@@ -9,6 +9,7 @@ const SETTING_API_KEY  = "qcheck_api_key";
 // ---------- DOM ----------
 const $ = (id) => document.getElementById(id);
 
+const toggleWrap        = $("toggleWrap");
 const toggleCompanyBtn  = $("toggleCompany");
 const toggleVesselBtn   = $("toggleVessel");
 const companyFields     = $("companyFields");
@@ -28,9 +29,12 @@ const vesselCompanyImo  = $("vesselCompanyImo");
 const vesselName        = $("vesselName");
 const vesselCompanyName = $("vesselCompanyName");
 
+const ismCollapseBtn    = $("ismCollapseBtn");
+const ismCollapseBody   = $("ismCollapseBody");
+const ismCollapseIcon   = $("ismCollapseIcon");
+
 const runBtn            = $("runBtn");
 const backToFormBtn     = $("backToForm");
-const useSelectionBtn   = $("useSelectionBtn");
 const settingsBtn       = $("settingsBtn");
 const closeSettingsBtn  = $("closeSettings");
 
@@ -40,25 +44,57 @@ const saveBtn           = $("saveBtn");
 const testBtn           = $("testBtn");
 const settingsStatus    = $("settingsStatus");
 
-let mode = "company";
+let mode     = "company";
+let firstRun = false;
 
 // ---------- Office.js init ----------
 Office.onReady(() => {
   console.log("Q Check task pane ready");
   bindEvents();
+  initApp();
 });
+
+// ---------- App init ----------
+function initApp() {
+  const key = getSetting(SETTING_API_KEY, "");
+  if (!key) {
+    firstRun = true;
+    toggleWrap.classList.add("hidden");
+    settingsBtn.classList.add("hidden");
+    closeSettingsBtn.classList.add("hidden");
+    apiBaseInput.value = getSetting(SETTING_API_BASE, DEFAULT_API_BASE);
+    apiKeyInput.value  = "";
+    settingsStatus.textContent = "";
+    settingsStatus.className   = "";
+    showView(settingsView);
+  } else {
+    showView(formView);
+  }
+}
 
 // ---------- Event binding ----------
 function bindEvents() {
   toggleCompanyBtn.addEventListener("click", () => setMode("company"));
   toggleVesselBtn.addEventListener("click", () => setMode("vessel"));
-  useSelectionBtn.addEventListener("click", grabSelectedText);
+  ismCollapseBtn.addEventListener("click", toggleIsmCollapse);
   runBtn.addEventListener("click", runQCheck);
   backToFormBtn.addEventListener("click", () => showView(formView));
   settingsBtn.addEventListener("click", openSettings);
   closeSettingsBtn.addEventListener("click", () => showView(formView));
   saveBtn.addEventListener("click", saveSettings);
   testBtn.addEventListener("click", testConnection);
+}
+
+// ---------- ISM Company collapse ----------
+function toggleIsmCollapse() {
+  const expanded = !ismCollapseBody.classList.contains("hidden");
+  if (expanded) {
+    ismCollapseBody.classList.add("hidden");
+    ismCollapseIcon.textContent = "▶";
+  } else {
+    ismCollapseBody.classList.remove("hidden");
+    ismCollapseIcon.textContent = "▼";
+  }
 }
 
 // ---------- Toggle ----------
@@ -77,49 +113,6 @@ function setMode(newMode) {
     vesselFields.classList.remove("hidden");
     if (companyImo.value && !vesselImo.value) vesselImo.value = companyImo.value;
   }
-}
-
-// ---------- Selected text ----------
-function grabSelectedText() {
-  if (!Office.context.mailbox || !Office.context.mailbox.item) {
-    return showError("Not running inside an Outlook email.");
-  }
-  const item = Office.context.mailbox.item;
-
-  // getSelectedDataAsync works in both Read and Compose modes
-  if (typeof item.getSelectedDataAsync === "function") {
-    item.getSelectedDataAsync(Office.CoercionType.Text, (result) => {
-      if (result.status === Office.AsyncResultStatus.Succeeded) {
-        const text = (result.value && result.value.data) || "";
-        applySelectionToImo(text);
-      } else {
-        showError("Couldn't read selected text: " + (result.error?.message || "unknown error"));
-      }
-    });
-  } else {
-    showError("This Outlook version doesn't expose selected text.");
-  }
-}
-
-function applySelectionToImo(text) {
-  const match = (text || "").match(/\d{4,7}/);
-  if (!match) {
-    flashSelectionButton("No number found in selection");
-    return;
-  }
-  const imo = match[0];
-  if (mode === "company") {
-    companyImo.value = imo;
-  } else {
-    vesselImo.value = imo;
-  }
-  flashSelectionButton("✓ Inserted " + imo);
-}
-
-function flashSelectionButton(msg) {
-  const original = useSelectionBtn.textContent;
-  useSelectionBtn.textContent = msg;
-  setTimeout(() => { useSelectionBtn.textContent = original; }, 1800);
 }
 
 // ---------- Settings storage (uses Office roaming settings) ----------
@@ -152,7 +145,7 @@ function openSettings() {
   apiBaseInput.value = getSetting(SETTING_API_BASE, DEFAULT_API_BASE);
   apiKeyInput.value  = getSetting(SETTING_API_KEY, "");
   settingsStatus.textContent = "";
-  settingsStatus.className = "";
+  settingsStatus.className   = "";
   showView(settingsView);
 }
 
@@ -171,6 +164,14 @@ async function saveSettings() {
     await setSetting(SETTING_API_KEY, key);
     settingsStatus.textContent = "Saved.";
     settingsStatus.className   = "status-msg ok";
+
+    if (firstRun) {
+      firstRun = false;
+      toggleWrap.classList.remove("hidden");
+      settingsBtn.classList.remove("hidden");
+      closeSettingsBtn.classList.remove("hidden");
+      setTimeout(() => showView(formView), 800);
+    }
   } catch (err) {
     settingsStatus.textContent = "Save failed: " + (err.message || err);
     settingsStatus.className   = "status-msg error";
@@ -245,17 +246,16 @@ async function runQCheck() {
     const vNm  = vesselName.value.trim();
     const cNm  = vesselCompanyName.value.trim();
     if (!isValidImo(vImo)) return showError("Please enter a valid Vessel IMO.");
-    if (!isValidImo(cImo)) return showError("Please enter a valid Company IMO.");
+    if (cImo && !isValidImo(cImo)) return showError("Please enter a valid Company IMO.");
+
+    const body = { vessel_imo: vImo, vessel_name: vNm };
+    if (cImo) body.company_imo  = cImo;
+    if (cNm)  body.company_name = cNm;
 
     await callApi({
       url:    `${apiBase}/api/v1/qcheck/vessel`,
       apiKey,
-      body:   {
-        vessel_imo:   vImo,
-        company_imo:  cImo,
-        vessel_name:  vNm,
-        company_name: cNm
-      },
+      body,
       onOk:   (data) => renderVesselResult({ vImo, vNm, data })
     });
   }
@@ -351,7 +351,6 @@ function colorClassForAssessment(a) {
 
 // ---------- Helpers ----------
 function copyToClipboard(text, btn) {
-  // Office task panes sometimes have restricted clipboard access; try modern API then fall back.
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(() => flashBtn(btn, "Copied!")).catch(() => fallbackCopy(text, btn));
   } else {
@@ -382,7 +381,6 @@ function flashBtn(btn, msg) {
 }
 
 function openUrl(url) {
-  // Office task panes prefer Office.context.ui.displayDialogAsync, but window.open works for opening browsers in desktop.
   try {
     window.open(url, "_blank");
   } catch (_) {
