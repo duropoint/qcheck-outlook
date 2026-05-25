@@ -1,8 +1,1 @@
-chrome.action.onClicked.addListener(() => {
-  chrome.windows.create({
-    url:    chrome.runtime.getURL("popup.html"),
-    type:   "popup",
-    width:  420,
-    height: 660
-  });
-});
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
