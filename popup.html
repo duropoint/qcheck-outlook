@@ -4,7 +4,13 @@
   <meta charset="UTF-8" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <title>Q Check</title>
-  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <!-- office.js is intentionally omitted — this file is the Chrome Extension popup.
+       env.js detects the extension environment via chrome.storage.sync and
+       never attempts to use Office APIs. -->
+  <style>
+    /* Fix popup dimensions — Chrome auto-sizes to viewport which is otherwise 0×0 */
+    html, body { width: 360px; height: 580px; overflow: hidden; }
+  </style>
   <link rel="stylesheet" href="taskpane.css" />
 </head>
 <body>
@@ -88,7 +94,7 @@
         <button class="run-btn" id="runBtn">Run Q Check</button>
 
         <div class="footer-note" id="footerNote">
-          Can take 10–90 seconds. Don't close this pane.
+          Can take 10–90 seconds. Don't close this tab.
         </div>
       </div>
     </div>
@@ -218,7 +224,7 @@
           <input type="password" id="zammadTokenInput" placeholder="Paste your Zammad personal token" />
         </label>
 
-        <label id="userEmailRow" class="hidden">
+        <label id="userEmailRow">
           Your Email
           <input type="email" id="userEmailInput" placeholder="you@example.com" />
         </label>
