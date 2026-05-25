@@ -434,9 +434,10 @@ function renderCompanyResult({ imo, name, data }) {
   banner.className   = "result-banner " + colorClass(data.global_performance);
   const url = data.shareable_url || "";
   $("companyShareUrl").textContent = url;
-  $("companyCopyBtn").onclick = () => copyToClipboard(url, $("companyCopyBtn"));
-  $("companyOpenBtn").onclick = () => Env.openUrl(url);
-  $("companyNewBtn").onclick  = () => showView(formView);
+  $("companyCopyBtn").onclick      = () => copyToClipboard(url, $("companyCopyBtn"));
+  $("companyOpenBtn").onclick      = () => Env.openUrl(url);
+  $("companyCopyTableBtn").onclick = () => copyAsTable(buildCompanyTable({ imo, name, data }), $("companyCopyTableBtn"));
+  $("companyNewBtn").onclick       = () => showView(formView);
 
   lastResultData = { mode: "company", imo, name, data };
 
@@ -463,9 +464,10 @@ function renderVesselResult({ vImo, vNm, data }) {
   setPill($("vesselCompanyPill"), a.company);
   const url = data.shareable_url || "";
   $("vesselShareUrl").textContent = url;
-  $("vesselCopyBtn").onclick = () => copyToClipboard(url, $("vesselCopyBtn"));
-  $("vesselOpenBtn").onclick = () => Env.openUrl(url);
-  $("vesselNewBtn").onclick  = () => showView(formView);
+  $("vesselCopyBtn").onclick      = () => copyToClipboard(url, $("vesselCopyBtn"));
+  $("vesselOpenBtn").onclick      = () => Env.openUrl(url);
+  $("vesselCopyTableBtn").onclick = () => copyAsTable(buildVesselTable({ vImo, vNm: vNm || data.vessel_name || "", data }), $("vesselCopyTableBtn"));
+  $("vesselNewBtn").onclick       = () => showView(formView);
 
   lastResultData = {
     mode: "vessel",
@@ -629,6 +631,95 @@ function setupAutocomplete({ inputEl, pairedEl, searchParam, dropdownEl }) {
 }
 
 // ---------- Helpers ----------
+function escHtml(str) {
+  return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function bannerStyle(value) {
+  const c = colorClass(value);
+  const bg = c === "green" ? "#16a34a" : c === "amber" ? "#d97706" : c === "red" ? "#dc2626" : "#6b7280";
+  return `background:${bg};color:#fff;padding:16px;text-align:center;font-size:17px;font-weight:800;letter-spacing:0.6px;text-transform:uppercase`;
+}
+
+function pillStyle(value) {
+  const c = colorClass(value);
+  if (c === "green") return "background:#dcfce7;color:#15803d;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap";
+  if (c === "amber") return "background:#fef3c7;color:#b45309;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap";
+  if (c === "red")   return "background:#fee2e2;color:#991b1b;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap";
+  return "background:#f3f4f6;color:#374151;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap";
+}
+
+const TABLE_HEADER_STYLE = "background:#145b76;color:#fff;padding:14px 16px";
+const TABLE_ROW_STYLE    = "border-bottom:1px solid #e5e7eb";
+const TABLE_CELL_STYLE   = "padding:10px 14px;font-weight:700;font-size:13px;color:#374151;text-transform:uppercase";
+const TABLE_CELL_R_STYLE = "padding:10px 14px;text-align:right";
+
+function buildCompanyTable({ imo, name, data }) {
+  const url = data.shareable_url || "";
+  return `<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:14px;min-width:320px">
+  <tr><td colspan="2" style="${TABLE_HEADER_STYLE}">
+    <div style="font-size:16px;font-weight:700">${escHtml(name)}</div>
+    <div style="font-size:13px;margin-top:2px;opacity:0.9">IMO: ${escHtml(imo)}</div>
+  </td></tr>
+  <tr><td colspan="2" style="${bannerStyle(data.global_performance)}">${escHtml(data.global_performance || "Unknown")}</td></tr>
+  <tr><td style="padding:10px 14px;font-size:12px;color:#6b7280">Q Check Report (valid 30 days)</td>
+      <td style="${TABLE_CELL_R_STYLE}">${url ? `<a href="${escHtml(url)}" style="color:#145b76;font-weight:700;font-size:13px">View Report &#8594;</a>` : ""}</td></tr>
+</table>`;
+}
+
+function buildVesselTable({ vImo, vNm, data }) {
+  const a   = data.assessment || {};
+  const url = data.shareable_url || "";
+  return `<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:14px;min-width:320px">
+  <tr><td colspan="2" style="${TABLE_HEADER_STYLE}">
+    <div style="font-size:16px;font-weight:700">${escHtml(vNm)}</div>
+    <div style="font-size:13px;margin-top:2px;opacity:0.9">IMO: ${escHtml(vImo)}</div>
+  </td></tr>
+  <tr><td colspan="2" style="${bannerStyle(a.global)}">${escHtml(a.global || "Unknown")}</td></tr>
+  <tr style="${TABLE_ROW_STYLE}">
+    <td style="${TABLE_CELL_STYLE}">Age Criteria</td>
+    <td style="${TABLE_CELL_R_STYLE}"><span style="${pillStyle(a.age)}">${escHtml(a.age || "Unknown")}</span></td>
+  </tr>
+  <tr style="${TABLE_ROW_STYLE}">
+    <td style="${TABLE_CELL_STYLE}">PSC Performance</td>
+    <td style="${TABLE_CELL_R_STYLE}"><span style="${pillStyle(a.psc)}">${escHtml(a.psc || "Unknown")}</span></td>
+  </tr>
+  <tr style="${TABLE_ROW_STYLE}">
+    <td style="${TABLE_CELL_STYLE}">Company Status</td>
+    <td style="${TABLE_CELL_R_STYLE}"><span style="${pillStyle(a.company)}">${escHtml(a.company || "Unknown")}</span></td>
+  </tr>
+  <tr><td style="padding:10px 14px;font-size:12px;color:#6b7280">Q Check Report (valid 30 days)</td>
+      <td style="${TABLE_CELL_R_STYLE}">${url ? `<a href="${escHtml(url)}" style="color:#145b76;font-weight:700;font-size:13px">View Report &#8594;</a>` : ""}</td></tr>
+</table>`;
+}
+
+function copyAsTable(html, btn) {
+  if (navigator.clipboard && navigator.clipboard.write) {
+    const blob = new Blob([html], { type: "text/html" });
+    navigator.clipboard.write([new ClipboardItem({ "text/html": blob })])
+      .then(() => flashBtn(btn, "Copied!"))
+      .catch(() => fallbackCopyHtml(html, btn));
+  } else {
+    fallbackCopyHtml(html, btn);
+  }
+}
+
+function fallbackCopyHtml(html, btn) {
+  const div = document.createElement("div");
+  div.innerHTML = html;
+  div.style.cssText = "position:fixed;opacity:0;pointer-events:none";
+  document.body.appendChild(div);
+  const range = document.createRange();
+  range.selectNode(div);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+  try { document.execCommand("copy"); flashBtn(btn, "Copied!"); }
+  catch (_) { flashBtn(btn, "Copy failed"); }
+  sel.removeAllRanges();
+  document.body.removeChild(div);
+}
+
 function copyToClipboard(text, btn) {
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(() => flashBtn(btn, "Copied!")).catch(() => fallbackCopy(text, btn));
