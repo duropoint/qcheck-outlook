@@ -381,6 +381,12 @@ input[type="text"]:focus, input[type="password"]:focus {
 .secondary-btn.full {
   width: 100%;
 }
+.table-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
 
 /* ---------- Outlook-specific additions ---------- */
 
