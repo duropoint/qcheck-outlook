@@ -59,6 +59,7 @@ let mode           = "company";
 let firstRun       = false;
 let pendingQCheck  = null;
 let lastResultData = null;
+let isComposeMode  = false;
 
 // ---------- Env init ----------
 Env.ready(() => {
@@ -67,6 +68,15 @@ Env.ready(() => {
     const note = $("footerNote");
     if (note) note.textContent = "Can take 10–90 seconds. Don't close this tab.";
   }
+
+  isComposeMode = !!(
+    typeof Office !== "undefined" &&
+    Office.context &&
+    Office.context.mailbox &&
+    Office.context.mailbox.item &&
+    Office.context.mailbox.item.body &&
+    typeof Office.context.mailbox.item.body.setSelectedDataAsync === "function"
+  );
 
   bindEvents();
   initApp();
@@ -438,6 +448,9 @@ function renderCompanyResult({ imo, name, data }) {
   $("companyOpenBtn").onclick      = () => Env.openUrl(url);
   $("companyCopyTableBtn").onclick = () => copyAsTable(buildCompanyTable({ imo, name, data }), $("companyCopyTableBtn"));
   $("companyNewBtn").onclick       = () => showView(formView);
+  const companyInsertBtn = $("companyInsertEmailBtn");
+  companyInsertBtn.classList.toggle("hidden", !isComposeMode);
+  companyInsertBtn.onclick = () => insertIntoEmail(buildCompanyTable({ imo, name, data }), companyInsertBtn);
 
   lastResultData = { mode: "company", imo, name, data };
 
@@ -468,6 +481,9 @@ function renderVesselResult({ vImo, vNm, data }) {
   $("vesselOpenBtn").onclick      = () => Env.openUrl(url);
   $("vesselCopyTableBtn").onclick = () => copyAsTable(buildVesselTable({ vImo, vNm: vNm || data.vessel_name || "", data }), $("vesselCopyTableBtn"));
   $("vesselNewBtn").onclick       = () => showView(formView);
+  const vesselInsertBtn = $("vesselInsertEmailBtn");
+  vesselInsertBtn.classList.toggle("hidden", !isComposeMode);
+  vesselInsertBtn.onclick = () => insertIntoEmail(buildVesselTable({ vImo, vNm: vNm || data.vessel_name || "", data }), vesselInsertBtn);
 
   lastResultData = {
     mode: "vessel",
@@ -691,6 +707,20 @@ function buildVesselTable({ vImo, vNm, data }) {
   <tr><td style="padding:10px 14px;font-size:12px;color:#6b7280">Q Check Report (valid 30 days)</td>
       <td style="${TABLE_CELL_R_STYLE}">${url ? `<a href="${escHtml(url)}" style="color:#145b76;font-weight:700;font-size:13px">View Report &#8594;</a>` : ""}</td></tr>
 </table>`;
+}
+
+function insertIntoEmail(html, btn) {
+  Office.context.mailbox.item.body.setSelectedDataAsync(
+    html,
+    { coercionType: Office.CoercionType.Html },
+    (result) => {
+      if (result.status === Office.AsyncResultStatus.Succeeded) {
+        flashBtn(btn, "Inserted!");
+      } else {
+        flashBtn(btn, "Failed");
+      }
+    }
+  );
 }
 
 function copyAsTable(html, btn) {
