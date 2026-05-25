@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <title>Q Check</title>
+  <!-- office.js is intentionally omitted — this file is the Chrome Extension popup.
+       env.js detects the extension environment via chrome.storage.sync and
+       never attempts to use Office APIs. -->
+  <style>
+    /* Fix popup dimensions — Chrome auto-sizes to viewport which is otherwise 0×0 */
+    html, body { width: 360px; height: 580px; overflow: hidden; }
+  </style>
+  <link rel="stylesheet" href="taskpane.css" />
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-title">Q Check</div>
+      <button class="settings-btn" id="settingsBtn" title="Settings">⚙</button>
+    </div>
+
+    <!-- Toggle -->
+    <div class="toggle-wrap" id="toggleWrap">
+      <button class="toggle-btn active" data-mode="company" id="toggleCompany">Company</button>
+      <button class="toggle-btn" data-mode="vessel" id="toggleVessel">Vessel</button>
+    </div>
+
+    <!-- Form -->
+    <div class="view" id="formView">
+      <div class="view-body">
+        <div class="field-group" id="companyFields">
+          <label>
+            <span>Company IMO <span class="req">*</span></span>
+            <div class="ts-wrap">
+              <input type="text" id="companyImo" placeholder="Search by IMO…" autocomplete="off" />
+              <button class="paste-btn" type="button" data-target="companyImo">Paste</button>
+              <div class="ts-dropdown hidden" id="companyImoDropdown"></div>
+            </div>
+          </label>
+          <label>
+            <span>Company Name <span class="opt">(optional)</span></span>
+            <div class="ts-wrap">
+              <input type="text" id="companyName" placeholder="Search by name…" autocomplete="off" />
+              <button class="paste-btn" type="button" data-target="companyName">Paste</button>
+              <div class="ts-dropdown hidden" id="companyNameDropdown"></div>
+            </div>
+          </label>
+        </div>
+
+        <div class="field-group hidden" id="vesselFields">
+          <label>
+            <span>Vessel IMO <span class="req">*</span></span>
+            <div class="input-wrap">
+              <input type="text" id="vesselImo" placeholder="7-digit IMO" />
+              <button class="paste-btn" type="button" data-target="vesselImo">Paste</button>
+            </div>
+          </label>
+          <label>
+            <span>Vessel Name <span class="opt">(optional)</span></span>
+            <div class="input-wrap">
+              <input type="text" id="vesselName" placeholder="e.g. MV EXAMPLE" />
+              <button class="paste-btn" type="button" data-target="vesselName">Paste</button>
+            </div>
+          </label>
+
+          <div class="ism-collapse-header">
+            <button class="ism-collapse-btn" id="ismCollapseBtn" type="button">
+              <span class="ism-collapse-icon" id="ismCollapseIcon">▶</span>
+              ISM Company <span class="opt">(optional)</span>
+            </button>
+          </div>
+          <div class="ism-collapse-body hidden" id="ismCollapseBody">
+            <label>
+              <span>Company IMO</span>
+              <div class="ts-wrap">
+                <input type="text" id="vesselCompanyImo" placeholder="Search by IMO…" autocomplete="off" />
+                <button class="paste-btn" type="button" data-target="vesselCompanyImo">Paste</button>
+                <div class="ts-dropdown hidden" id="vesselCompanyImoDropdown"></div>
+              </div>
+            </label>
+            <label>
+              <span>Company Name</span>
+              <div class="ts-wrap">
+                <input type="text" id="vesselCompanyName" placeholder="Search by name…" autocomplete="off" />
+                <button class="paste-btn" type="button" data-target="vesselCompanyName">Paste</button>
+                <div class="ts-dropdown hidden" id="vesselCompanyNameDropdown"></div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <button class="run-btn" id="runBtn">Run Q Check</button>
+
+        <div class="footer-note" id="footerNote">
+          Can take 10–90 seconds. Don't close this tab.
+        </div>
+      </div>
+    </div>
+
+    <!-- Loading -->
+    <div class="view hidden" id="loadingView">
+      <div class="view-body loading-body">
+        <div class="spinner"></div>
+        <div class="loading-text">Running Q Check…</div>
+        <div class="loading-sub">This can take up to 90 seconds</div>
+      </div>
+    </div>
+
+    <!-- Error -->
+    <div class="view hidden" id="errorView">
+      <div class="view-body">
+        <div class="error-box" id="errorMsg"></div>
+        <button class="secondary-btn full" id="backToForm">Back</button>
+      </div>
+    </div>
+
+    <!-- Company already-in-DB confirmation -->
+    <div class="view hidden" id="confirmView">
+      <div class="view-body">
+        <div class="confirm-box">
+          <p class="confirm-msg">This company already manages vessels with Portugal / Madeira and is therefore accepted.</p>
+          <p class="confirm-question">Do you still want to proceed with the Q Check?</p>
+        </div>
+        <div class="confirm-actions">
+          <button class="secondary-btn" id="confirmCancelBtn">Back</button>
+          <button class="run-btn confirm-proceed-btn" id="confirmProceedBtn">Yes, Proceed</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Company Result -->
+    <div class="view hidden" id="companyResult">
+      <div class="view-body">
+        <div class="result-header">
+          <div class="result-name" id="companyResultName"></div>
+          <div class="result-imo" id="companyResultImo"></div>
+        </div>
+        <div class="result-banner" id="companyResultBanner"></div>
+
+        <div class="share-box">
+          <div class="share-label">Shareable Report (valid 30 days)</div>
+          <div class="share-url" id="companyShareUrl"></div>
+          <div class="share-actions">
+            <button class="secondary-btn" id="companyCopyBtn">Copy Link</button>
+            <button class="secondary-btn primary" id="companyOpenBtn">Open Report</button>
+          </div>
+        </div>
+
+        <button class="escalate-btn full hidden" id="companyEscalateBtn">Send to Maritime Team</button>
+        <div class="zammad-status hidden" id="companyZammadStatus"></div>
+
+        <button class="secondary-btn full" id="companyNewBtn">New Check</button>
+      </div>
+    </div>
+
+    <!-- Vessel Result -->
+    <div class="view hidden" id="vesselResult">
+      <div class="view-body">
+        <div class="result-header">
+          <div class="result-name" id="vesselResultName"></div>
+          <div class="result-imo" id="vesselResultImo"></div>
+        </div>
+
+        <div class="global-assessment">
+          <div class="global-label">Global Final Assessment</div>
+          <div class="global-banner" id="vesselGlobalBanner"></div>
+        </div>
+
+        <div class="factor-grid">
+          <div class="factor-card">
+            <div class="factor-title">AGE CRITERIA</div>
+            <div class="factor-pill" id="vesselAgePill"></div>
+          </div>
+          <div class="factor-card">
+            <div class="factor-title">PSC PERFORMANCE</div>
+            <div class="factor-pill" id="vesselPscPill"></div>
+          </div>
+          <div class="factor-card">
+            <div class="factor-title">COMPANY STATUS</div>
+            <div class="factor-pill" id="vesselCompanyPill"></div>
+          </div>
+        </div>
+
+        <div class="share-box">
+          <div class="share-label">Shareable Report (valid 30 days)</div>
+          <div class="share-url" id="vesselShareUrl"></div>
+          <div class="share-actions">
+            <button class="secondary-btn" id="vesselCopyBtn">Copy Link</button>
+            <button class="secondary-btn primary" id="vesselOpenBtn">Open Report</button>
+          </div>
+        </div>
+
+        <button class="escalate-btn full hidden" id="vesselEscalateBtn">Send to Maritime Team</button>
+        <div class="zammad-status hidden" id="vesselZammadStatus"></div>
+
+        <button class="secondary-btn full" id="vesselNewBtn">New Check</button>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div class="view hidden" id="settingsView">
+      <div class="view-body">
+        <h3 class="settings-title">Settings</h3>
+
+        <label>
+          API Base URL
+          <input type="text" id="apiBase" placeholder="https://pscplatformalpha.onrender.com" />
+        </label>
+
+        <label>
+          Q Check API Key
+          <input type="password" id="apiKey" placeholder="Paste your Q_CHECK_API_KEY" />
+        </label>
+
+        <label>
+          Companies Search Key
+          <input type="password" id="companiesApiKey" placeholder="Paste your companies search API key" />
+        </label>
+
+        <label>
+          Zammad Token
+          <input type="password" id="zammadTokenInput" placeholder="Paste your Zammad personal token" />
+        </label>
+
+        <label id="userEmailRow">
+          Your Email
+          <input type="email" id="userEmailInput" placeholder="you@example.com" />
+        </label>
+
+        <div class="btn-row">
+          <button class="run-btn" id="saveBtn" style="flex:1;">Save</button>
+          <button class="secondary-btn" id="testBtn" style="flex:0 0 auto; padding:12px 16px;">Test APIs</button>
+        </div>
+
+        <div id="settingsStatus"></div>
+
+        <button class="secondary-btn full" id="closeSettings" style="margin-top: 16px;">Back</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="env.js"></script>
+  <script src="taskpane.js"></script>
+</body>
+</html>

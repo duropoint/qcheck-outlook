@@ -1,23 +1,38 @@
-# Q Check — Outlook Add-in
+# Q Check — Outlook Add-in & Chrome Extension
 
-Outlook task pane that runs PSC Q Check on any IMO number directly inside Outlook (Mac, Windows, Web).
+Task pane / popup that runs PSC Q Check on any IMO number directly inside Outlook or Chrome.
 
 ---
 
 ## How it works
 
-1. Read or compose any email in Outlook
-2. Click the **Q Check** button in the ribbon
-3. Task pane opens on the right side
-4. Highlight an IMO in the email → click **"Use selected text"** → it fills the IMO field automatically
-5. (Or type the IMO manually)
-6. Toggle Company/Vessel, click **Run Q Check**, get the assessment + shareable link
-
-Same logic as the Chrome extension, just docked inside Outlook.
+1. Open Outlook (or click the Q Check toolbar icon in Chrome)
+2. Task pane / popup opens
+3. Type or paste an IMO number
+4. Toggle Company / Vessel, click **Run Q Check**, get the assessment + shareable link
 
 ---
 
-## Installation — 3 stages
+## Chrome Extension — Installation
+
+### STAGE 1 — Load the extension
+
+1. Open Chrome and go to `chrome://extensions`
+2. Enable **Developer mode** (toggle, top right)
+3. Click **Load unpacked**
+4. Select the unzipped `qcheck-chrome-extension` folder
+5. The Q Check icon appears in your Chrome toolbar
+
+### STAGE 2 — Configure your API keys
+
+1. Click the Q Check toolbar icon → popup opens
+2. First run shows the Settings screen automatically
+3. Fill in API Base URL, Q Check API Key, Companies Search Key, Zammad Token, and your Email
+4. Click **Test APIs** to verify, then **Save**
+
+---
+
+## Outlook Add-in — Installation
 
 ### STAGE 1 — Host the files on GitHub Pages (one-time, ~10 min)
 
@@ -29,8 +44,7 @@ The add-in files must be served over HTTPS. GitHub Pages is free and easy.
 4. Set it to **Public** (required for free GitHub Pages).
 5. Check **"Add a README file"**, then click **Create repository**.
 6. In the new repo, click **Add file → Upload files**.
-7. Drag in **every file from this folder** (manifest.xml, taskpane.html, taskpane.css, taskpane.js, functionfile.html, and the entire `assets` folder with all 5 PNGs).
-   - Tip: select all files in the unzipped folder and drag them in at once. GitHub will preserve the `assets/` subfolder structure.
+7. Drag in **every file from this folder** (manifest.xml, taskpane.html, taskpane.css, taskpane.js, env.js, functionfile.html, and the entire `assets` folder with all 5 PNGs).
 8. Scroll to the bottom → click **Commit changes**.
 9. In the repo, click **Settings** (top tabs) → **Pages** (left sidebar).
 10. Under "Build and deployment", set:
@@ -39,7 +53,7 @@ The add-in files must be served over HTTPS. GitHub Pages is free and easy.
     - Click **Save**.
 11. Wait 1–2 minutes. Refresh the Pages settings tab. You'll see:
     > **Your site is live at https://duropoint.github.io/qcheck-outlook/**
-12. Open that URL in your browser. You should see a directory listing (or a blank page — either is fine). To verify it's actually working, visit:
+12. Open that URL in your browser to verify. Visit:
     `https://duropoint.github.io/qcheck-outlook/taskpane.html`
     You should see the Q Check form UI.
 
@@ -62,7 +76,7 @@ The add-in files must be served over HTTPS. GitHub Pages is free and easy.
 1. Open any email in Outlook.
 2. Click the **Q Check** ribbon button → task pane opens on the right.
 3. Click the **⚙ gear icon** (top-right of the pane).
-4. Paste your API key (the `Q_CHECK_API_KEY` from Render).
+4. Fill in API Base URL, Q Check API Key, Companies Search Key, and Zammad Token.
 5. Click **Test** to verify, then **Save**.
 6. Click **Back** to return to the form.
 
@@ -72,41 +86,44 @@ The add-in files must be served over HTTPS. GitHub Pages is free and easy.
 
 ## Daily usage
 
-- Read an email with an IMO → highlight the number → click **Q Check** in the ribbon → click **Use selected text** → toggle mode → **Run Q Check**.
-- Or just open the pane and type/paste the IMO directly.
-- Results show the same color-coded badges and shareable link as the Chrome extension and the PSC Platform itself.
+- Type or paste an IMO into the Company or Vessel field
+- Toggle Company / Vessel mode as needed
+- Click **Run Q Check** — results show color-coded badges and a shareable link
+- If the result is not acceptable, click **Send to Maritime Team** to create a Zammad ticket
 
 ---
 
 ## Important: enable CORS on your API
 
-The Outlook task pane runs from origin `https://duropoint.github.io`. Your Render API must allow this origin, or every call will fail with "Failed to fetch" (same as we saw with the Chrome popup window).
-
-Add this header to your API responses (in your Render Flask/FastAPI server):
+The Outlook task pane runs from origin `https://duropoint.github.io`. The Chrome
+Extension makes requests from a `chrome-extension://` origin. Both origins must
+be allowed by your Render API.
 
 **Python Flask** — install `flask-cors`, then:
 ```python
 from flask_cors import CORS
 CORS(app, origins=[
     "https://duropoint.github.io",
-    "chrome-extension://*"
+    "chrome-extension://*",
 ], allow_headers=["Content-Type", "X-API-Key"])
 ```
 
 **Python FastAPI** —
 ```python
+import re
 from fastapi.middleware.cors import CORSMiddleware
+
+# FastAPI's CORSMiddleware doesn't support wildcards in origins for custom schemes,
+# so use a custom middleware or override allow_origin_regex:
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://duropoint.github.io"],
-    allow_methods=["POST"],
+    allow_origin_regex=r"https://duropoint\.github\.io|chrome-extension://.*",
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "X-API-Key"],
 )
 ```
 
-Redeploy on Render. After that, the add-in will work.
-
-> Reminder: the **Chrome extension** doesn't need CORS — it uses the service worker. Only the Outlook add-in does, because Office task panes can't bypass CORS.
+Redeploy on Render after making this change.
 
 ---
 
@@ -139,7 +156,6 @@ The add-in will then appear in every selected user's Outlook (Mac, Windows, web,
 - **Task pane shows blank / error loading**: Open `https://duropoint.github.io/qcheck-outlook/taskpane.html` in your browser. If it doesn't load there, GitHub Pages isn't set up yet (wait 2 more minutes or recheck Stage 1).
 - **"Failed to fetch" when running a check**: CORS issue. See the CORS section above.
 - **"API key not set"**: Click the ⚙ icon in the pane and configure it.
-- **"Use selected text" does nothing**: Make sure you actually highlighted text in the email body before clicking. Subject line text doesn't count in Mac Outlook.
 
 ---
 
@@ -147,11 +163,14 @@ The add-in will then appear in every selected user's Outlook (Mac, Windows, web,
 
 ```
 qcheck-outlook/
-├── manifest.xml           Add-in definition (this is what you sideload)
-├── taskpane.html          Task pane UI
-├── taskpane.css           Styling
-├── taskpane.js            Logic + Office.js integration
-├── functionfile.html      Required helper file
+├── manifest.xml           Outlook add-in definition (sideload this into Outlook)
+├── manifest.json          Chrome Extension manifest (load unpacked from the zip)
+├── popup.html             Chrome Extension popup UI
+├── taskpane.html          Outlook task pane UI (also works as a plain browser tab)
+├── taskpane.css           Shared styling
+├── env.js                 Environment abstraction (Outlook / Extension / Browser)
+├── taskpane.js            Shared logic
+├── functionfile.html      Required Office add-in helper
 ├── assets/
 │   ├── icon-16.png
 │   ├── icon-32.png
