@@ -1,12 +1,13 @@
-// Q Check — Outlook task pane logic
+// Q Check — task pane logic (Outlook + Browser + Chrome Extension)
 
 const DEFAULT_API_BASE  = "https://pscplatformalpha.onrender.com";
 const ZAMMAD_PROXY_URL  = "https://zammad-dashboard.onrender.com/api/zammad";
 
-const SETTING_API_BASE        = "qcheck_api_base";
-const SETTING_API_KEY         = "qcheck_api_key";
-const SETTING_COMPANIES_KEY   = "qcheck_companies_key";
-const SETTING_ZAMMAD_TOKEN    = "qcheck_zammad_token";
+const SETTING_API_BASE      = "qcheck_api_base";
+const SETTING_API_KEY       = "qcheck_api_key";
+const SETTING_COMPANIES_KEY = "qcheck_companies_key";
+const SETTING_ZAMMAD_TOKEN  = "qcheck_zammad_token";
+const SETTING_USER_EMAIL    = "qcheck_user_email";
 
 // ---------- DOM ----------
 const $ = (id) => document.getElementById(id);
@@ -41,13 +42,15 @@ const backToFormBtn     = $("backToForm");
 const settingsBtn       = $("settingsBtn");
 const closeSettingsBtn  = $("closeSettings");
 
-const apiBaseInput          = $("apiBase");
-const apiKeyInput           = $("apiKey");
-const companiesApiKeyInput  = $("companiesApiKey");
-const zammadTokenInput      = $("zammadTokenInput");
-const saveBtn               = $("saveBtn");
-const testBtn               = $("testBtn");
-const settingsStatus        = $("settingsStatus");
+const apiBaseInput         = $("apiBase");
+const apiKeyInput          = $("apiKey");
+const companiesApiKeyInput = $("companiesApiKey");
+const zammadTokenInput     = $("zammadTokenInput");
+const userEmailInput       = $("userEmailInput");
+const userEmailRow         = $("userEmailRow");
+const saveBtn              = $("saveBtn");
+const testBtn              = $("testBtn");
+const settingsStatus       = $("settingsStatus");
 
 const companyEscalateBtn = $("companyEscalateBtn");
 const vesselEscalateBtn  = $("vesselEscalateBtn");
@@ -57,38 +60,44 @@ let firstRun       = false;
 let pendingQCheck  = null;
 let lastResultData = null;
 
-// ---------- Office.js init ----------
-Office.onReady(() => {
+// ---------- Env init ----------
+Env.ready(() => {
+  if (!Env.isOffice) {
+    userEmailRow.classList.remove("hidden");
+    const note = $("footerNote");
+    if (note) note.textContent = "Can take 10–90 seconds. Don't close this tab.";
+  }
+
   bindEvents();
   initApp();
   setupAutocomplete({ inputEl: companyImo,       pairedEl: companyName,       searchParam: "imo",  dropdownEl: $("companyImoDropdown") });
   setupAutocomplete({ inputEl: companyName,       pairedEl: companyImo,        searchParam: "name", dropdownEl: $("companyNameDropdown") });
   setupAutocomplete({ inputEl: vesselCompanyImo,  pairedEl: vesselCompanyName, searchParam: "imo",  dropdownEl: $("vesselCompanyImoDropdown") });
   setupAutocomplete({ inputEl: vesselCompanyName, pairedEl: vesselCompanyImo,  searchParam: "name", dropdownEl: $("vesselCompanyNameDropdown") });
-  // Paste buttons
   document.querySelectorAll(".paste-btn").forEach(btn => {
-    btn.addEventListener("mousedown", e => e.preventDefault()); // keep input focused
+    btn.addEventListener("mousedown", e => e.preventDefault());
     btn.addEventListener("click", () => handlePaste($(btn.dataset.target)));
   });
 });
 
 // ---------- App init ----------
-// Gate: all three settings (URL + both keys) must be saved before accessing the app.
+// Gate: all four settings must be saved before the form is accessible.
 function initApp() {
-  const base         = getSetting(SETTING_API_BASE, "");
-  const key          = getSetting(SETTING_API_KEY, "");
-  const companiesKey = getSetting(SETTING_COMPANIES_KEY, "");
-  const zammadToken  = getSetting(SETTING_ZAMMAD_TOKEN, "");
+  const base         = Env.getSetting(SETTING_API_BASE, "");
+  const key          = Env.getSetting(SETTING_API_KEY, "");
+  const companiesKey = Env.getSetting(SETTING_COMPANIES_KEY, "");
+  const zammadToken  = Env.getSetting(SETTING_ZAMMAD_TOKEN, "");
 
   if (!base || !key || !companiesKey || !zammadToken) {
     firstRun = true;
     toggleWrap.classList.add("hidden");
     settingsBtn.classList.add("hidden");
     closeSettingsBtn.classList.add("hidden");
-    apiBaseInput.value         = getSetting(SETTING_API_BASE, DEFAULT_API_BASE);
-    apiKeyInput.value          = getSetting(SETTING_API_KEY, "");
-    companiesApiKeyInput.value = getSetting(SETTING_COMPANIES_KEY, "");
-    zammadTokenInput.value     = getSetting(SETTING_ZAMMAD_TOKEN, "");
+    apiBaseInput.value         = Env.getSetting(SETTING_API_BASE, DEFAULT_API_BASE);
+    apiKeyInput.value          = Env.getSetting(SETTING_API_KEY, "");
+    companiesApiKeyInput.value = Env.getSetting(SETTING_COMPANIES_KEY, "");
+    zammadTokenInput.value     = Env.getSetting(SETTING_ZAMMAD_TOKEN, "");
+    if (!Env.isOffice) userEmailInput.value = Env.getSetting(SETTING_USER_EMAIL, "");
     settingsStatus.textContent = "";
     settingsStatus.className   = "";
     showView(settingsView);
@@ -134,7 +143,7 @@ async function handlePaste(inputEl) {
       inputEl.dispatchEvent(new Event("input", { bubbles: true }));
     }
   } catch (_) {
-    // Clipboard access denied — focus the field so user can paste with keyboard
+    // Clipboard access denied — let user paste manually
   }
   inputEl.focus();
 }
@@ -169,37 +178,21 @@ function setMode(newMode) {
   }
 }
 
-// ---------- Settings storage ----------
-function getSetting(key, fallback) {
-  if (!Office.context.roamingSettings) return fallback;
-  const v = Office.context.roamingSettings.get(key);
-  return v == null ? fallback : v;
-}
-
-function setSetting(key, value) {
-  if (!Office.context.roamingSettings) return Promise.resolve();
-  Office.context.roamingSettings.set(key, value);
-  return new Promise((resolve, reject) => {
-    Office.context.roamingSettings.saveAsync((result) => {
-      if (result.status === Office.AsyncResultStatus.Succeeded) resolve();
-      else reject(result.error);
-    });
-  });
-}
-
+// ---------- Config helper ----------
 function getConfig() {
   return {
-    apiBase: (getSetting(SETTING_API_BASE, DEFAULT_API_BASE) || DEFAULT_API_BASE).replace(/\/$/, ""),
-    apiKey:  getSetting(SETTING_API_KEY, "") || ""
+    apiBase: (Env.getSetting(SETTING_API_BASE, DEFAULT_API_BASE) || DEFAULT_API_BASE).replace(/\/$/, ""),
+    apiKey:  Env.getSetting(SETTING_API_KEY, "") || ""
   };
 }
 
 // ---------- Settings UI ----------
 function openSettings() {
-  apiBaseInput.value         = getSetting(SETTING_API_BASE, DEFAULT_API_BASE);
-  apiKeyInput.value          = getSetting(SETTING_API_KEY, "");
-  companiesApiKeyInput.value = getSetting(SETTING_COMPANIES_KEY, "");
-  zammadTokenInput.value     = getSetting(SETTING_ZAMMAD_TOKEN, "");
+  apiBaseInput.value         = Env.getSetting(SETTING_API_BASE, DEFAULT_API_BASE);
+  apiKeyInput.value          = Env.getSetting(SETTING_API_KEY, "");
+  companiesApiKeyInput.value = Env.getSetting(SETTING_COMPANIES_KEY, "");
+  zammadTokenInput.value     = Env.getSetting(SETTING_ZAMMAD_TOKEN, "");
+  if (!Env.isOffice) userEmailInput.value = Env.getSetting(SETTING_USER_EMAIL, "");
   settingsStatus.textContent = "";
   settingsStatus.className   = "";
   showView(settingsView);
@@ -233,10 +226,13 @@ async function saveSettings() {
   }
 
   try {
-    await setSetting(SETTING_API_BASE, base.replace(/\/$/, ""));
-    await setSetting(SETTING_API_KEY, key);
-    await setSetting(SETTING_COMPANIES_KEY, companiesKey);
-    await setSetting(SETTING_ZAMMAD_TOKEN, zammadToken);
+    await Env.setSetting(SETTING_API_BASE, base.replace(/\/$/, ""));
+    await Env.setSetting(SETTING_API_KEY, key);
+    await Env.setSetting(SETTING_COMPANIES_KEY, companiesKey);
+    await Env.setSetting(SETTING_ZAMMAD_TOKEN, zammadToken);
+    if (!Env.isOffice) {
+      await Env.setSetting(SETTING_USER_EMAIL, userEmailInput.value.trim());
+    }
     settingsStatus.textContent = "Saved.";
     settingsStatus.className   = "status-msg ok";
 
@@ -264,7 +260,6 @@ async function testConnection() {
 
   const lines = [];
 
-  // Test Q Check API
   if (!key) {
     lines.push("Q Check API: no key entered");
   } else {
@@ -282,7 +277,6 @@ async function testConnection() {
     }
   }
 
-  // Test Companies Search API
   if (!companiesKey) {
     lines.push("Companies API: no key entered");
   } else {
@@ -297,7 +291,6 @@ async function testConnection() {
     }
   }
 
-  // Test Zammad proxy
   if (!zammadToken) {
     lines.push("Zammad proxy: token required");
   } else {
@@ -354,7 +347,7 @@ async function runQCheck() {
       onOk: (data) => renderCompanyResult({ imo, name, data })
     });
 
-    if (getSetting(SETTING_COMPANIES_KEY, "")) {
+    if (Env.getSetting(SETTING_COMPANIES_KEY, "")) {
       const results = await searchCompanies({ imo });
       if (results.find(r => isSameImo(r.company_imo, imo))) {
         pendingQCheck = proceed;
@@ -375,7 +368,7 @@ async function runQCheck() {
 
     const body = { vessel_imo: vImo, vessel_name: vNm };
     if (cImo) {
-      body.company_imo  = cImo;
+      body.company_imo = cImo;
       if (cNm) body.company_name = cNm;
     }
 
@@ -442,7 +435,7 @@ function renderCompanyResult({ imo, name, data }) {
   const url = data.shareable_url || "";
   $("companyShareUrl").textContent = url;
   $("companyCopyBtn").onclick = () => copyToClipboard(url, $("companyCopyBtn"));
-  $("companyOpenBtn").onclick = () => openUrl(url);
+  $("companyOpenBtn").onclick = () => Env.openUrl(url);
   $("companyNewBtn").onclick  = () => showView(formView);
 
   lastResultData = { mode: "company", imo, name, data };
@@ -471,7 +464,7 @@ function renderVesselResult({ vImo, vNm, data }) {
   const url = data.shareable_url || "";
   $("vesselShareUrl").textContent = url;
   $("vesselCopyBtn").onclick = () => copyToClipboard(url, $("vesselCopyBtn"));
-  $("vesselOpenBtn").onclick = () => openUrl(url);
+  $("vesselOpenBtn").onclick = () => Env.openUrl(url);
   $("vesselNewBtn").onclick  = () => showView(formView);
 
   lastResultData = {
@@ -499,7 +492,7 @@ function setPill(el, value) {
   el.className   = "factor-pill " + colorClass(value);
 }
 
-// ---------- Company autocomplete ----------
+// ---------- Autocomplete ----------
 
 function debounce(fn, ms) {
   let t;
@@ -515,7 +508,7 @@ function escHtml(s) {
 
 async function searchCompanies({ name, imo }) {
   const { apiBase } = getConfig();
-  const key = getSetting(SETTING_COMPANIES_KEY, "");
+  const key = Env.getSetting(SETTING_COMPANIES_KEY, "");
   if (!key) return [];
 
   const params = new URLSearchParams();
@@ -662,14 +655,6 @@ function flashBtn(btn, msg) {
   setTimeout(() => { btn.textContent = original; }, 1500);
 }
 
-function openUrl(url) {
-  try {
-    window.open(url, "_blank");
-  } catch (_) {
-    Office.context.ui.openBrowserWindow(url);
-  }
-}
-
 // ---------- Zammad ticket ----------
 
 function buildZammadTitle(d) {
@@ -680,7 +665,7 @@ function buildZammadTitle(d) {
 }
 
 function buildZammadDescription(d) {
-  const profile   = Office.context.mailbox.userProfile;
+  const profile   = Env.getUserProfile();
   const userName  = profile.displayName  || "";
   const userEmail = profile.emailAddress || "";
 
@@ -722,8 +707,8 @@ function buildZammadDescription(d) {
     "",
     `**Global Assessment** : ${global}`,
     "",
-    `**Age Criteria** : ${a.age     || "Unknown"}`,
-    `**PSC Performance** : ${a.psc  || "Unknown"}`,
+    `**Age Criteria** : ${a.age      || "Unknown"}`,
+    `**PSC Performance** : ${a.psc   || "Unknown"}`,
     `**Company Status** : ${a.company || "Unknown"}`,
     "",
     `**Report Link** : ${url}`,
@@ -736,7 +721,7 @@ function buildZammadDescription(d) {
 }
 
 async function submitZammadTicket(btnEl, statusEl) {
-  const zammadToken = getSetting(SETTING_ZAMMAD_TOKEN, "");
+  const zammadToken = Env.getSetting(SETTING_ZAMMAD_TOKEN, "");
 
   if (!zammadToken) {
     statusEl.textContent = "Zammad token not configured — open Settings.";
@@ -748,7 +733,7 @@ async function submitZammadTicket(btnEl, statusEl) {
   const d         = lastResultData;
   const title     = buildZammadTitle(d);
   const body      = buildZammadDescription(d);
-  const userEmail = Office.context.mailbox.userProfile.emailAddress;
+  const userEmail = Env.getUserProfile().emailAddress;
 
   const ticket = {
     title,
