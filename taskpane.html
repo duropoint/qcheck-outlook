@@ -11,18 +11,117 @@
   <div class="container">
     <!-- Header -->
     <div class="header">
-      <div class="header-title">Q Check</div>
-      <button class="settings-btn" id="settingsBtn" title="Settings">⚙</button>
+      <button class="back-btn hidden" id="backBtn" title="Back">&#8592;</button>
+      <div class="header-title" id="headerTitle">Q Check</div>
+      <button class="settings-btn" id="settingsBtn" title="Settings">&#9881;</button>
     </div>
 
     <!-- Toggle -->
-    <div class="toggle-wrap" id="toggleWrap">
+    <div class="toggle-wrap hidden" id="toggleWrap">
       <button class="toggle-btn active" data-mode="company" id="toggleCompany">Company</button>
       <button class="toggle-btn" data-mode="vessel" id="toggleVessel">Vessel</button>
     </div>
 
+    <!-- Main menu -->
+    <div class="view" id="mainView">
+      <div class="view-body main-body">
+        <div class="menu-grid">
+          <button class="menu-tile" id="tileMaritimeBtn">
+            <span class="menu-icon">&#9875;</span>
+            <span class="menu-label">Maritime</span>
+          </button>
+          <button class="menu-tile" disabled>
+            <span class="menu-soon">Soon</span>
+            <span class="menu-icon">&#128100;</span>
+            <span class="menu-label">Seafarers</span>
+          </button>
+          <button class="menu-tile" disabled>
+            <span class="menu-soon">Soon</span>
+            <span class="menu-icon">&#128203;</span>
+            <span class="menu-label">Registration</span>
+          </button>
+          <button class="menu-tile" disabled>
+            <span class="menu-soon">Soon</span>
+            <span class="menu-icon">&#128188;</span>
+            <span class="menu-label">Sales</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Maritime sub-menu -->
+    <div class="view hidden" id="maritimeView">
+      <div class="view-body">
+        <div class="feature-list">
+          <button class="feature-tile" id="tileQCheckBtn">
+            <span class="feature-icon">&#10003;</span>
+            <div class="feature-info">
+              <div class="feature-name">Q Check</div>
+              <div class="feature-desc">PSC quality check by vessel or company IMO</div>
+            </div>
+          </button>
+          <button class="feature-tile" id="tileVesselSearchBtn">
+            <span class="feature-icon">&#128269;</span>
+            <div class="feature-info">
+              <div class="feature-name">Vessel Search</div>
+              <div class="feature-desc">Look up vessel data by name</div>
+            </div>
+          </button>
+          <button class="feature-tile" id="tileZammadReportsBtn">
+            <span class="feature-icon">&#128196;</span>
+            <div class="feature-info">
+              <div class="feature-name">Zammad Reports</div>
+              <div class="feature-desc">Generate maritime PDF reports</div>
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Vessel Search -->
+    <div class="view hidden" id="zammadSearchView">
+      <div class="view-body">
+        <div class="zvl-search-wrap">
+          <input type="text" id="zvlSearchInput" placeholder="Type vessel name (min 2 chars)&#8230;" autocomplete="off" />
+        </div>
+        <div id="zvlStatus" class="zvl-status"></div>
+        <ul id="zvlResultsList" class="zvl-list"></ul>
+        <div id="zvlDetail" class="zvl-detail hidden">
+          <button class="zvl-back-btn" id="zvlBackToResults">&#8592; Results</button>
+          <div id="zvlDetailCard" class="zvl-detail-card"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Zammad Reports -->
+    <div class="view hidden" id="zammadReportsView">
+      <div class="view-body">
+        <label>
+          Updated From
+          <input type="date" id="rptFrom" />
+        </label>
+        <label>
+          Updated To
+          <input type="date" id="rptTo" />
+        </label>
+        <label>
+          Vessel IMO <span class="opt">(optional)</span>
+          <input type="text" id="rptVesselImo" placeholder="e.g. 9123456" />
+        </label>
+        <div class="states-box">
+          States included: <strong>open</strong>, <strong>new</strong>, <strong>With MAR/DGRM/GAMA</strong>, <strong>With RO</strong>
+        </div>
+        <label class="check-label">
+          <input type="checkbox" id="rptIncludeClosed" />
+          <span>Include closed states (adds <strong>closed</strong>, <strong>pending close</strong>, <strong>pending reminder</strong>)</span>
+        </label>
+        <button class="run-btn" id="rptGenerateBtn">Generate PDF</button>
+        <div id="rptStatus" class="rpt-status"></div>
+      </div>
+    </div>
+
     <!-- Form -->
-    <div class="view" id="formView">
+    <div class="view hidden" id="formView">
       <div class="view-body">
         <div class="field-group" id="companyFields">
           <label>

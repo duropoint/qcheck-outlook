@@ -42,6 +42,8 @@ body {
   font-size: 16px;
   font-weight: 700;
   letter-spacing: 0.4px;
+  flex: 1;
+  text-align: center;
 }
 
 .close-btn {
@@ -639,3 +641,300 @@ input[type="text"]:focus, input[type="password"]:focus {
 }
 .zammad-status.ok    { background: #dcfce7; color: #15803d; }
 .zammad-status.error { background: #fee2e2; color: #991b1b; }
+
+/* ---------- Back button ---------- */
+.back-btn {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 6px;
+  opacity: 0.9;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.back-btn:hover { opacity: 1; }
+
+/* ---------- Main menu ---------- */
+.main-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 260px;
+}
+
+.menu-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  width: 100%;
+  max-width: 290px;
+}
+
+.menu-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 22px 12px 18px;
+  background: #fff;
+  border: 1.5px solid #dde1e7;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+  min-height: 108px;
+}
+
+.menu-tile:not([disabled]):hover {
+  background: #f0f6ff;
+  border-color: #145b76;
+}
+
+.menu-tile[disabled] {
+  opacity: 0.42;
+  cursor: not-allowed;
+  background: #f6f8fa;
+}
+
+.menu-icon {
+  font-size: 30px;
+  line-height: 1;
+}
+
+.menu-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a2332;
+}
+
+.menu-soon {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  font-size: 9px;
+  font-weight: 700;
+  color: #8c959f;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: #e8eaed;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+/* ---------- Maritime feature list ---------- */
+.feature-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.feature-tile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1.5px solid #dde1e7;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, border-color 0.15s;
+  width: 100%;
+}
+
+.feature-tile:hover {
+  background: #f0f6ff;
+  border-color: #145b76;
+}
+
+.feature-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+  width: 28px;
+  text-align: center;
+}
+
+.feature-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a2332;
+  margin-bottom: 2px;
+}
+
+.feature-desc {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.35;
+}
+
+/* ---------- Vessel search ---------- */
+.zvl-search-wrap {
+  margin-bottom: 10px;
+}
+
+.zvl-search-wrap input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border 0.15s;
+}
+
+.zvl-search-wrap input:focus {
+  border-color: #145b76;
+  box-shadow: 0 0 0 3px rgba(20, 91, 118, 0.12);
+}
+
+.zvl-status {
+  font-size: 12px;
+  color: #6b7280;
+  min-height: 16px;
+  margin-bottom: 8px;
+}
+
+.zvl-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.zvl-result-item {
+  padding: 10px 13px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  background: #fff;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.zvl-result-item:hover {
+  background: #f0f6ff;
+  border-color: #145b76;
+}
+
+.zvl-result-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a2332;
+}
+
+.zvl-result-imo {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.zvl-back-btn {
+  background: none;
+  border: none;
+  color: #145b76;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0 0 10px 0;
+  font-weight: 600;
+  display: block;
+}
+
+.zvl-back-btn:hover { text-decoration: underline; }
+
+.zvl-detail-card {
+  border: 1px solid #dde1e7;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.zvl-detail-header {
+  background: #145b76;
+  color: #fff;
+  padding: 14px 16px;
+}
+
+.zvl-detail-vessel-name {
+  font-size: 15px;
+  font-weight: 700;
+  word-break: break-word;
+}
+
+.zvl-detail-imo {
+  font-size: 12px;
+  opacity: 0.85;
+  margin-top: 3px;
+}
+
+.zvl-detail-body {
+  padding: 4px 0;
+  background: #fff;
+}
+
+.zvl-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 8px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 13px;
+}
+
+.zvl-detail-row:last-child { border-bottom: none; }
+
+.zvl-detail-key {
+  color: #6b7280;
+  flex-shrink: 0;
+  margin-right: 12px;
+}
+
+.zvl-detail-val {
+  color: #1a2332;
+  font-weight: 600;
+  text-align: right;
+}
+
+/* ---------- Zammad Reports ---------- */
+.rpt-status {
+  margin-top: 10px;
+  font-size: 13px;
+  min-height: 18px;
+  font-weight: 600;
+}
+.rpt-status.ok   { color: #16a34a; }
+.rpt-status.err  { color: #dc2626; }
+.rpt-status.info { color: #6b7280; }
+
+.states-box {
+  font-size: 12px;
+  color: #57606a;
+  padding: 8px 11px;
+  background: #f6f8fa;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
+.check-label {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-start !important;
+  gap: 8px !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  color: #374151 !important;
+  cursor: pointer;
+  line-height: 1.4;
+  margin-bottom: 16px;
+}
+
+.check-label input[type="checkbox"] {
+  width: auto !important;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
