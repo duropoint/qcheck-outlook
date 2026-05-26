@@ -6,8 +6,9 @@ const ZAMMAD_PROXY_URL  = "https://zammad-dashboard.onrender.com/api/zammad";
 const SETTING_API_BASE      = "qcheck_api_base";
 const SETTING_API_KEY       = "qcheck_api_key";
 const SETTING_COMPANIES_KEY = "qcheck_companies_key";
-const SETTING_ZAMMAD_TOKEN  = "qcheck_zammad_token";
-const SETTING_USER_EMAIL    = "qcheck_user_email";
+const SETTING_ZAMMAD_TOKEN   = "qcheck_zammad_token";
+const SETTING_DASHBOARD_KEY  = "qcheck_dashboard_key";
+const SETTING_USER_EMAIL     = "qcheck_user_email";
 
 // ---------- DOM ----------
 const $ = (id) => document.getElementById(id);
@@ -45,8 +46,9 @@ const closeSettingsBtn  = $("closeSettings");
 const apiBaseInput         = $("apiBase");
 const apiKeyInput          = $("apiKey");
 const companiesApiKeyInput = $("companiesApiKey");
-const zammadTokenInput     = $("zammadTokenInput");
-const userEmailInput       = $("userEmailInput");
+const zammadTokenInput      = $("zammadTokenInput");
+const dashboardApiKeyInput  = $("dashboardApiKeyInput");
+const userEmailInput        = $("userEmailInput");
 const userEmailRow         = $("userEmailRow");
 const saveBtn              = $("saveBtn");
 const testBtn              = $("testBtn");
@@ -114,14 +116,15 @@ Env.ready(() => {
 });
 
 // ---------- App init ----------
-// Gate: all four settings must be saved before the form is accessible.
+// Gate: all five settings must be saved before the form is accessible.
 function initApp() {
   const base         = Env.getSetting(SETTING_API_BASE, "");
   const key          = Env.getSetting(SETTING_API_KEY, "");
   const companiesKey = Env.getSetting(SETTING_COMPANIES_KEY, "");
   const zammadToken  = Env.getSetting(SETTING_ZAMMAD_TOKEN, "");
+  const dashboardKey = Env.getSetting(SETTING_DASHBOARD_KEY, "");
 
-  if (!base || !key || !companiesKey || !zammadToken) {
+  if (!base || !key || !companiesKey || !zammadToken || !dashboardKey) {
     firstRun = true;
     toggleWrap.classList.add("hidden");
     settingsBtn.classList.add("hidden");
@@ -130,6 +133,7 @@ function initApp() {
     apiKeyInput.value          = Env.getSetting(SETTING_API_KEY, "");
     companiesApiKeyInput.value = Env.getSetting(SETTING_COMPANIES_KEY, "");
     zammadTokenInput.value     = Env.getSetting(SETTING_ZAMMAD_TOKEN, "");
+    dashboardApiKeyInput.value = Env.getSetting(SETTING_DASHBOARD_KEY, "");
     if (!Env.isOffice) userEmailInput.value = Env.getSetting(SETTING_USER_EMAIL, "");
     settingsStatus.textContent = "";
     settingsStatus.className   = "";
@@ -244,6 +248,7 @@ function openSettings() {
   apiKeyInput.value          = Env.getSetting(SETTING_API_KEY, "");
   companiesApiKeyInput.value = Env.getSetting(SETTING_COMPANIES_KEY, "");
   zammadTokenInput.value     = Env.getSetting(SETTING_ZAMMAD_TOKEN, "");
+  dashboardApiKeyInput.value = Env.getSetting(SETTING_DASHBOARD_KEY, "");
   if (!Env.isOffice) userEmailInput.value = Env.getSetting(SETTING_USER_EMAIL, "");
   settingsStatus.textContent = "";
   settingsStatus.className   = "";
@@ -255,6 +260,7 @@ async function saveSettings() {
   const key          = apiKeyInput.value.trim();
   const companiesKey = companiesApiKeyInput.value.trim();
   const zammadToken  = zammadTokenInput.value.trim();
+  const dashboardKey = dashboardApiKeyInput.value.trim();
 
   if (!base) {
     settingsStatus.textContent = "Please enter the API Base URL.";
@@ -276,12 +282,18 @@ async function saveSettings() {
     settingsStatus.className   = "status-msg error";
     return;
   }
+  if (!dashboardKey) {
+    settingsStatus.textContent = "Please enter a Dashboard API key.";
+    settingsStatus.className   = "status-msg error";
+    return;
+  }
 
   try {
     await Env.setSetting(SETTING_API_BASE, base.replace(/\/$/, ""));
     await Env.setSetting(SETTING_API_KEY, key);
     await Env.setSetting(SETTING_COMPANIES_KEY, companiesKey);
     await Env.setSetting(SETTING_ZAMMAD_TOKEN, zammadToken);
+    await Env.setSetting(SETTING_DASHBOARD_KEY, dashboardKey);
     if (!Env.isOffice) {
       await Env.setSetting(SETTING_USER_EMAIL, userEmailInput.value.trim());
     }
@@ -304,6 +316,7 @@ async function testConnection() {
   const key          = apiKeyInput.value.trim();
   const companiesKey = companiesApiKeyInput.value.trim();
   const zammadToken  = zammadTokenInput.value.trim();
+  const dashboardKey = dashboardApiKeyInput.value.trim();
 
   settingsStatus.textContent = "Testing…";
   settingsStatus.className   = "status-msg";
@@ -354,6 +367,23 @@ async function testConnection() {
       else                          lines.push(`Zammad proxy: OK (${resp.status}) ✓`);
     } catch {
       lines.push("Zammad proxy: connection failed");
+    }
+  }
+
+  if (!dashboardKey) {
+    lines.push("Dashboard API: no key entered");
+  } else {
+    try {
+      const resp = await fetch("https://zammad-dashboard.onrender.com/api/v1/report", {
+        method:  "POST",
+        headers: { "Authorization": `Bearer ${dashboardKey}`, "Content-Type": "application/json" },
+        body:    JSON.stringify({ format: "pdf", limit: 1, filters: { state: ["open"] } })
+      });
+      if (resp.status === 401)      lines.push("Dashboard API: key rejected (401)");
+      else if (resp.status === 404) lines.push("Dashboard API: endpoint not found");
+      else                          lines.push(`Dashboard API: OK (${resp.status}) ✓`);
+    } catch {
+      lines.push("Dashboard API: connection failed");
     }
   }
 
@@ -1029,15 +1059,15 @@ function onZvlInput() {
 }
 
 async function doVesselSearch(name) {
-  const apiBase = (Env.getSetting(SETTING_API_BASE, DEFAULT_API_BASE) || DEFAULT_API_BASE).replace(/\/$/, "");
-  const apiKey  = Env.getSetting(SETTING_API_KEY, "") || "";
-  if (!apiKey) {
-    zvlStatus.textContent = "API key not configured — open Settings.";
+  const apiBase    = (Env.getSetting(SETTING_API_BASE, DEFAULT_API_BASE) || DEFAULT_API_BASE).replace(/\/$/, "");
+  const searchKey  = Env.getSetting(SETTING_COMPANIES_KEY, "") || "";
+  if (!searchKey) {
+    zvlStatus.textContent = "Companies Search key not configured — open Settings.";
     return;
   }
   try {
     const resp = await fetch(`${apiBase}${SHIP_SEARCH_PATH}?name=${encodeURIComponent(name)}`, {
-      headers: { "X-API-Key": apiKey }
+      headers: { "X-API-Key": searchKey }
     });
     if (resp.status === 401) { zvlStatus.textContent = "API key rejected (401)."; return; }
     if (!resp.ok) { zvlStatus.textContent = `Error ${resp.status}.`; return; }
@@ -1109,9 +1139,9 @@ function setRptStatus(text, type) {
 }
 
 async function generateReport() {
-  const zammadToken = Env.getSetting(SETTING_ZAMMAD_TOKEN, "");
-  if (!zammadToken) {
-    setRptStatus("Zammad token not configured — open Settings.", "err");
+  const dashboardKey = Env.getSetting(SETTING_DASHBOARD_KEY, "");
+  if (!dashboardKey) {
+    setRptStatus("Dashboard API key not configured — open Settings.", "err");
     return;
   }
 
@@ -1132,7 +1162,7 @@ async function generateReport() {
   try {
     const resp = await fetch(REPORT_API_URL, {
       method:  "POST",
-      headers: { "Authorization": `Bearer ${zammadToken}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${dashboardKey}`, "Content-Type": "application/json" },
       body:    JSON.stringify({ format: "pdf", limit: 1000, filters })
     });
 
