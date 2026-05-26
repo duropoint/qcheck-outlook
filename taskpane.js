@@ -8,6 +8,7 @@ const SETTING_API_KEY       = "qcheck_api_key";
 const SETTING_COMPANIES_KEY = "qcheck_companies_key";
 const SETTING_ZAMMAD_TOKEN  = "qcheck_zammad_token";
 const SETTING_USER_EMAIL    = "qcheck_user_email";
+const STORAGE_COMPANY_HISTORY = "qcheck_company_history";
 
 // ---------- DOM ----------
 const $ = (id) => document.getElementById(id);
@@ -435,6 +436,23 @@ function colorClass(v) {
   return "amber";
 }
 
+// ---------- Company result history ----------
+function loadCompanyHistory() {
+  try {
+    const raw = localStorage.getItem(STORAGE_COMPANY_HISTORY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function saveCompanyHistory(imo, name, data) {
+  const history = loadCompanyHistory();
+  const key = String(parseInt(imo, 10));
+  history[key] = { imo, name, data, savedAt: new Date().toISOString() };
+  localStorage.setItem(STORAGE_COMPANY_HISTORY, JSON.stringify(history));
+}
+
 // ---------- Render ----------
 function renderCompanyResult({ imo, name, data }) {
   $("companyResultName").textContent = name || "Company";
@@ -448,6 +466,13 @@ function renderCompanyResult({ imo, name, data }) {
   $("companyOpenBtn").onclick      = () => Env.openUrl(url);
   $("companyCopyTableBtn").onclick = () => copyAsTable(buildCompanyTable({ imo, name, data }), $("companyCopyTableBtn"));
   $("companyNewBtn").onclick       = () => showView(formView);
+  const companySaveResultBtn = $("companySaveResultBtn");
+  companySaveResultBtn.textContent = "Save Result";
+  companySaveResultBtn.disabled    = false;
+  companySaveResultBtn.onclick = () => {
+    saveCompanyHistory(imo, name, data);
+    flashBtn(companySaveResultBtn, "Saved!");
+  };
   const companyInsertBtn = $("companyInsertEmailBtn");
   companyInsertBtn.classList.toggle("hidden", !isComposeMode);
   companyInsertBtn.onclick = () => insertIntoEmail(buildCompanyTable({ imo, name, data }), companyInsertBtn);
