@@ -21,6 +21,7 @@ const Env = (() => {
   function _detectEnv() {
     if (_isExtension) return "extension";
     if (
+      window === window.top &&
       typeof Office !== "undefined" &&
       Office.context != null &&
       Office.context.requirements != null
