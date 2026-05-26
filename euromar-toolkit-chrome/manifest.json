@@ -5,7 +5,8 @@
   "description": "Collection of internal EUROMAR tools — loads UI from the EUROMAR Toolkit hosted backend.",
   "permissions": [
     "contextMenus",
-    "storage"
+    "storage",
+    "sidePanel"
   ],
   "host_permissions": [
     "https://duropoint.github.io/*",
@@ -13,6 +14,9 @@
   ],
   "background": {
     "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "popup.html"
   },
   "action": {
     "default_icon": {

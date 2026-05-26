@@ -3,9 +3,31 @@ const TOOLKIT_URL = "https://duropoint.github.io/qcheck-outlook/taskpane.html";
 const TOOLKIT_ORIGIN = new URL(TOOLKIT_URL).origin;
 const iframe = document.getElementById("contentFrame");
 
-// Forward all URL params from popup.html?… to the hosted toolkit
-const params = new URLSearchParams(window.location.search);
-iframe.src = params.toString() ? `${TOOLKIT_URL}?${params.toString()}` : TOOLKIT_URL;
+// ── Initial load ──────────────────────────────────────────────────────────────
+// Apply any selection that was stashed by a context-menu click in background.js
+
+async function initIframe() {
+  const { pendingSelection } = await chrome.storage.session.get("pendingSelection");
+  if (pendingSelection) {
+    await chrome.storage.session.remove("pendingSelection");
+    iframe.src = `${TOOLKIT_URL}?selection=${encodeURIComponent(pendingSelection)}`;
+  } else {
+    iframe.src = TOOLKIT_URL;
+  }
+}
+
+initIframe();
+
+// ── Live selection updates ────────────────────────────────────────────────────
+// If the panel is already open when a context-menu click arrives, react here
+// rather than waiting for a full reload.
+
+chrome.storage.session.onChanged.addListener((changes) => {
+  const newValue = changes.pendingSelection?.newValue;
+  if (!newValue) return;
+  chrome.storage.session.remove("pendingSelection");
+  iframe.src = `${TOOLKIT_URL}?selection=${encodeURIComponent(newValue)}`;
+});
 
 // ── Message bridge ────────────────────────────────────────────────────────────
 // Only accept messages originating from our iframe; reply only to its origin.
@@ -22,7 +44,7 @@ window.addEventListener("message", async (event) => {
       break;
 
     case "resize":
-      // Reserved for future use — toolkit can suggest a preferred window size.
+      // Reserved for future use — toolkit can suggest a preferred panel size.
       break;
 
     case "toolkit-api": {

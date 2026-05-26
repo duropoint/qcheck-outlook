@@ -1,11 +1,11 @@
 const TOOLKIT_URL = "https://duropoint.github.io/qcheck-outlook/taskpane.html";
 
-const POPUP_WIDTH = 500;
-const POPUP_HEIGHT = 720;
-
-// ── Context menu ─────────────────────────────────────────────────────────────
+// ── Context menu + side panel behaviour on install ───────────────────────────
 
 chrome.runtime.onInstalled.addListener(() => {
+  // Toolbar icon click toggles the side panel automatically
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+
   chrome.contextMenus.create({
     id: "euromar-toolkit-menu",
     title: "EUROMAR Toolkit",
@@ -13,49 +13,21 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-// ── Icon click → open popup window ───────────────────────────────────────────
+// ── Context menu click → extract number, open side panel ─────────────────────
 
-chrome.action.onClicked.addListener(async (tab) => {
-  const { left, top } = await getPopupPosition(tab);
-  chrome.windows.create({
-    url: chrome.runtime.getURL("popup.html"),
-    type: "popup",
-    width: POPUP_WIDTH,
-    height: POPUP_HEIGHT,
-    left,
-    top
-  });
-});
-
-// ── Context menu click → extract number, open popup ──────────────────────────
-
-chrome.contextMenus.onClicked.addListener((info) => {
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const selection = info.selectionText ?? "";
   const match = selection.match(/\d{4,7}/);
-  const base = chrome.runtime.getURL("popup.html");
-  const url = match ? `${base}?selection=${encodeURIComponent(match[0])}` : base;
-  chrome.windows.create({
-    url,
-    type: "popup",
-    width: POPUP_WIDTH,
-    height: POPUP_HEIGHT
-  });
+
+  if (match) {
+    // Store temporarily so popup.js can read it (handles both fresh open and already-open panel)
+    await chrome.storage.session.set({ pendingSelection: match[0] });
+  }
+
+  await chrome.sidePanel.open({ windowId: tab.windowId });
 });
 
-// ── Position helper: top-right of the focused browser window ─────────────────
-
-async function getPopupPosition(tab) {
-  try {
-    const win = await chrome.windows.get(tab.windowId);
-    const left = Math.max(0, (win.left ?? 0) + (win.width ?? 1280) - POPUP_WIDTH - 20);
-    const top = (win.top ?? 0) + 60;
-    return { left, top };
-  } catch {
-    return { left: undefined, top: undefined };
-  }
-}
-
-// ── API bridge: forwards requests from the popup iframe ──────────────────────
+// ── API bridge: forwards requests from the panel iframe ──────────────────────
 // Generic handler — any toolkit tool can POST to any endpoint via this bridge.
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
