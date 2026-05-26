@@ -3,27 +3,28 @@ const TOOLKIT_URL = "https://duropoint.github.io/qcheck-outlook/taskpane.html";
 const TOOLKIT_ORIGIN = new URL(TOOLKIT_URL).origin;
 const iframe = document.getElementById("contentFrame");
 
-// Set src synchronously so the panel never opens blank
-iframe.src = TOOLKIT_URL;
+// Always append ?context=extension so the hosted toolkit knows it's in the shell
+const BASE_SRC = `${TOOLKIT_URL}?context=extension`;
 
-// Then check if a context-menu selection is waiting and update src if so
+// Set src synchronously so the panel never opens blank
+iframe.src = BASE_SRC;
+
+// Then check if a context-menu selection is waiting and append it
 chrome.storage.session.get("pendingSelection")
   .then(({ pendingSelection }) => {
     if (!pendingSelection) return;
     chrome.storage.session.remove("pendingSelection");
-    iframe.src = `${TOOLKIT_URL}?selection=${encodeURIComponent(pendingSelection)}`;
+    iframe.src = `${BASE_SRC}&selection=${encodeURIComponent(pendingSelection)}`;
   })
-  .catch(() => {}); // src is already set above if storage is unavailable
+  .catch(() => {});
 
 // ── Live selection updates ────────────────────────────────────────────────────
-// If the panel is already open when a context-menu click arrives, react here
-// rather than waiting for a full reload.
 
 chrome.storage.session.onChanged.addListener((changes) => {
   const newValue = changes.pendingSelection?.newValue;
   if (!newValue) return;
   chrome.storage.session.remove("pendingSelection");
-  iframe.src = `${TOOLKIT_URL}?selection=${encodeURIComponent(newValue)}`;
+  iframe.src = `${BASE_SRC}&selection=${encodeURIComponent(newValue)}`;
 });
 
 // ── Message bridge ────────────────────────────────────────────────────────────
@@ -59,6 +60,26 @@ window.addEventListener("message", async (event) => {
       } catch (err) {
         iframe.contentWindow.postMessage(
           { type: "toolkit-api-response", requestId, ok: false, error: err.message },
+          TOOLKIT_ORIGIN
+        );
+      }
+      break;
+    }
+
+    case "zvl_fill": {
+      const requestId = msg.requestId ?? `${Date.now()}-${Math.random()}`;
+      try {
+        const response = await chrome.runtime.sendMessage({
+          action: "zvl_fill",
+          vessel: msg.vessel
+        });
+        iframe.contentWindow.postMessage(
+          { type: "zvl_fill_response", requestId, ...response },
+          TOOLKIT_ORIGIN
+        );
+      } catch (err) {
+        iframe.contentWindow.postMessage(
+          { type: "zvl_fill_response", requestId, ok: false, error: err.message },
           TOOLKIT_ORIGIN
         );
       }

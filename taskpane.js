@@ -1128,7 +1128,7 @@ function showZvlDetail(r) {
     )
   + `</div>`;
 
-  if (Env.env === "extension") {
+  if (Env.env === "extension" || new URLSearchParams(location.search).get("context") === "extension") {
     const fillBtn = document.createElement("button");
     fillBtn.className = "run-btn";
     fillBtn.style.marginTop = "12px";
@@ -1141,18 +1141,14 @@ function showZvlDetail(r) {
 }
 
 function insertVesselIntoZammadTicket(vessel, btn) {
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    const tab = tabs[0];
-    if (!tab) { flashBtn(btn, "No active tab"); return; }
-    if (!tab.url || !tab.url.startsWith("https://euromar.zammad.com/#ticket/")) {
-      flashBtn(btn, "Open a Zammad ticket first");
-      return;
-    }
-    chrome.tabs.sendMessage(tab.id, { type: "zvl_fill", vessel }, (resp) => {
-      if (chrome.runtime.lastError) { flashBtn(btn, "Not on Zammad"); return; }
-      flashBtn(btn, resp && resp.ok ? "Filled ✓" : "Fields not found");
-    });
-  });
+  const requestId = `${Date.now()}-${Math.random()}`;
+  function handleResp(event) {
+    if (!event.data || event.data.type !== "zvl_fill_response" || event.data.requestId !== requestId) return;
+    window.removeEventListener("message", handleResp);
+    flashBtn(btn, event.data.ok ? "Filled ✓" : (event.data.error || "Fields not found"));
+  }
+  window.addEventListener("message", handleResp);
+  window.parent.postMessage({ type: "zvl_fill", vessel, requestId }, "*");
 }
 
 // ---------- Zammad Reports ----------
