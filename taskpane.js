@@ -411,6 +411,7 @@ function updateNavChrome(view) {
   let backTarget   = null;
 
   if (id === "mainView") {
+    title = "Euromar Toolkit";
     showSettings = !firstRun;
   } else if (id === "maritimeView") {
     title = "Maritime";
