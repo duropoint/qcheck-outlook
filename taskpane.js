@@ -55,11 +55,34 @@ const settingsStatus       = $("settingsStatus");
 const companyEscalateBtn = $("companyEscalateBtn");
 const vesselEscalateBtn  = $("vesselEscalateBtn");
 
+const backBtn           = $("backBtn");
+const headerTitle       = $("headerTitle");
+const mainView          = $("mainView");
+const maritimeView      = $("maritimeView");
+const zammadSearchView  = $("zammadSearchView");
+const zammadReportsView = $("zammadReportsView");
+const zvlSearchInput    = $("zvlSearchInput");
+const zvlStatus         = $("zvlStatus");
+const zvlResultsList    = $("zvlResultsList");
+const zvlDetail         = $("zvlDetail");
+const zvlDetailCard     = $("zvlDetailCard");
+const zvlBackToResults  = $("zvlBackToResults");
+const rptFrom           = $("rptFrom");
+const rptTo             = $("rptTo");
+const rptVesselImo      = $("rptVesselImo");
+const rptIncludeClosed  = $("rptIncludeClosed");
+const rptGenerateBtn    = $("rptGenerateBtn");
+const rptStatus         = $("rptStatus");
+
 let mode           = "company";
 let firstRun       = false;
 let pendingQCheck  = null;
 let lastResultData = null;
 let isComposeMode  = false;
+let currentView        = null;
+let settingsReturnView = null;
+let zvlSearchTimer     = null;
+let zvlResults         = [];
 
 // ---------- Env init ----------
 Env.ready(() => {
@@ -113,7 +136,7 @@ function initApp() {
     showView(settingsView);
   } else {
     closeSettingsBtn.classList.remove("hidden");
-    showView(formView);
+    showView(mainView);
   }
 }
 
@@ -125,7 +148,7 @@ function bindEvents() {
   runBtn.addEventListener("click", runQCheck);
   backToFormBtn.addEventListener("click", () => showView(formView));
   settingsBtn.addEventListener("click", openSettings);
-  closeSettingsBtn.addEventListener("click", () => showView(formView));
+  closeSettingsBtn.addEventListener("click", () => showView(settingsReturnView || mainView));
   saveBtn.addEventListener("click", saveSettings);
   testBtn.addEventListener("click", testConnection);
   $("confirmProceedBtn").addEventListener("click", () => {
@@ -141,6 +164,24 @@ function bindEvents() {
   vesselEscalateBtn.addEventListener("click", () =>
     submitZammadTicket(vesselEscalateBtn, $("vesselZammadStatus"))
   );
+  $("tileMaritimeBtn").addEventListener("click", () => showView(maritimeView));
+  $("tileQCheckBtn").addEventListener("click", () => showView(formView));
+  $("tileVesselSearchBtn").addEventListener("click", () => {
+    zvlSearchInput.value = "";
+    zvlStatus.textContent = "";
+    zvlResultsList.innerHTML = "";
+    zvlDetail.classList.add("hidden");
+    zvlResultsList.classList.remove("hidden");
+    showView(zammadSearchView);
+    setTimeout(() => zvlSearchInput.focus(), 80);
+  });
+  $("tileZammadReportsBtn").addEventListener("click", () => showView(zammadReportsView));
+  zvlSearchInput.addEventListener("input", onZvlInput);
+  zvlBackToResults.addEventListener("click", () => {
+    zvlDetail.classList.add("hidden");
+    zvlResultsList.classList.remove("hidden");
+  });
+  rptGenerateBtn.addEventListener("click", generateReport);
 }
 
 // ---------- Paste helper ----------
@@ -198,6 +239,7 @@ function getConfig() {
 
 // ---------- Settings UI ----------
 function openSettings() {
+  settingsReturnView = currentView;
   apiBaseInput.value         = Env.getSetting(SETTING_API_BASE, DEFAULT_API_BASE);
   apiKeyInput.value          = Env.getSetting(SETTING_API_KEY, "");
   companiesApiKeyInput.value = Env.getSetting(SETTING_COMPANIES_KEY, "");
@@ -248,10 +290,8 @@ async function saveSettings() {
 
     if (firstRun) {
       firstRun = false;
-      toggleWrap.classList.remove("hidden");
-      settingsBtn.classList.remove("hidden");
       closeSettingsBtn.classList.remove("hidden");
-      setTimeout(() => showView(formView), 800);
+      setTimeout(() => showView(mainView), 800);
     }
   } catch (err) {
     settingsStatus.textContent = "Save failed: " + (err.message || err);
@@ -324,9 +364,56 @@ async function testConnection() {
 
 // ---------- View switching ----------
 function showView(view) {
-  [formView, loadingView, errorView, confirmView, companyResult, vesselResult, settingsView]
+  [mainView, maritimeView, zammadSearchView, zammadReportsView,
+   formView, loadingView, errorView, confirmView, companyResult, vesselResult, settingsView]
+    .filter(v => v)
     .forEach(v => v.classList.add("hidden"));
   view.classList.remove("hidden");
+  currentView = view;
+  updateNavChrome(view);
+}
+
+function updateNavChrome(view) {
+  const id = view.id;
+  let title        = "Q Check";
+  let showSettings = false;
+  let showToggle   = false;
+  let backTarget   = null;
+
+  if (id === "mainView") {
+    showSettings = !firstRun;
+  } else if (id === "maritimeView") {
+    title = "Maritime";
+    showSettings = !firstRun;
+    backTarget = mainView;
+  } else if (id === "formView") {
+    showToggle = !firstRun;
+    backTarget = maritimeView;
+  } else if (id === "zammadSearchView") {
+    title = "Vessel Search";
+    backTarget = maritimeView;
+  } else if (id === "zammadReportsView") {
+    title = "Zammad Reports";
+    backTarget = maritimeView;
+  } else if (id === "settingsView") {
+    title = "Settings";
+    if (!firstRun) backTarget = "settingsReturn";
+  }
+
+  headerTitle.textContent = title;
+  settingsBtn.classList.toggle("hidden", !showSettings);
+  toggleWrap.classList.toggle("hidden", !showToggle);
+
+  if (backTarget === "settingsReturn") {
+    backBtn.classList.remove("hidden");
+    backBtn.onclick = () => showView(settingsReturnView || mainView);
+  } else if (backTarget) {
+    backBtn.classList.remove("hidden");
+    backBtn.onclick = () => showView(backTarget);
+  } else {
+    backBtn.classList.add("hidden");
+    backBtn.onclick = null;
+  }
 }
 
 // ---------- Validation ----------
@@ -912,5 +999,174 @@ async function submitZammadTicket(btnEl, statusEl) {
     statusEl.textContent = err.message || "Network error. Please try again.";
     statusEl.className   = "zammad-status error";
     statusEl.classList.remove("hidden");
+  }
+}
+
+// ---------- HTML escaping ----------
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+// ---------- Vessel search ----------
+const SHIP_SEARCH_PATH = "/api/ships/search";
+
+function onZvlInput() {
+  const q = zvlSearchInput.value.trim();
+  clearTimeout(zvlSearchTimer);
+  zvlDetail.classList.add("hidden");
+  zvlResultsList.classList.remove("hidden");
+  if (q.length < 2) {
+    zvlResultsList.innerHTML = "";
+    zvlStatus.textContent = q.length === 1 ? "Type at least 2 characters." : "";
+    return;
+  }
+  zvlStatus.textContent = "Searching…";
+  zvlSearchTimer = setTimeout(() => doVesselSearch(q), 300);
+}
+
+async function doVesselSearch(name) {
+  const apiBase = (Env.getSetting(SETTING_API_BASE, DEFAULT_API_BASE) || DEFAULT_API_BASE).replace(/\/$/, "");
+  const apiKey  = Env.getSetting(SETTING_API_KEY, "") || "";
+  if (!apiKey) {
+    zvlStatus.textContent = "API key not configured — open Settings.";
+    return;
+  }
+  try {
+    const resp = await fetch(`${apiBase}${SHIP_SEARCH_PATH}?name=${encodeURIComponent(name)}`, {
+      headers: { "X-API-Key": apiKey }
+    });
+    if (resp.status === 401) { zvlStatus.textContent = "API key rejected (401)."; return; }
+    if (!resp.ok) { zvlStatus.textContent = `Error ${resp.status}.`; return; }
+    const data = await resp.json();
+    zvlResults = data.results || [];
+    if (!zvlResults.length) {
+      zvlStatus.textContent = "No vessels found.";
+      zvlResultsList.innerHTML = "";
+    } else {
+      zvlStatus.textContent = `${zvlResults.length} result${zvlResults.length > 1 ? "s" : ""}`;
+      renderZvlResults(zvlResults);
+    }
+  } catch (err) {
+    zvlStatus.textContent = "Network error: " + (err.message || "unknown");
+  }
+}
+
+function renderZvlResults(results) {
+  zvlResultsList.innerHTML = "";
+  results.forEach((r) => {
+    const li = document.createElement("li");
+    li.className = "zvl-result-item";
+    li.innerHTML = `<div class="zvl-result-name">${escHtml(r.vessel_name || "Unknown")}</div>`
+                 + `<div class="zvl-result-imo">IMO ${escHtml(String(r.vessel_imo || "—"))}</div>`;
+    li.addEventListener("click", () => showZvlDetail(r));
+    zvlResultsList.appendChild(li);
+  });
+}
+
+function showZvlDetail(r) {
+  zvlResultsList.classList.add("hidden");
+
+  const fmtNum = (v) => {
+    const n = Number(String(v || "").replace(/[^\d.]/g, ""));
+    return Number.isFinite(n) && n > 0 ? n.toLocaleString("en-US") : null;
+  };
+
+  const rows = [
+    r.vessel_type         ? ["Type",          r.vessel_type]                                                             : null,
+    r.class_society       ? ["Class Society", r.class_society]                                                           : null,
+    fmtNum(r.gross_tonnage) ? ["Gross Tonnage", fmtNum(r.gross_tonnage)]                                                 : null,
+    r.year_built          ? ["Year Built",    String(r.year_built)]                                                      : null,
+    r.ism_manager         ? ["ISM Manager",   r.ism_manager + (r.ism_manager_imo ? ` (IMO ${r.ism_manager_imo})` : "")] : null
+  ].filter(Boolean);
+
+  zvlDetailCard.innerHTML =
+    `<div class="zvl-detail-header">`
+  + `<div class="zvl-detail-vessel-name">${escHtml(r.vessel_name || "Unknown")}</div>`
+  + `<div class="zvl-detail-imo">IMO ${escHtml(String(r.vessel_imo || "—"))}</div>`
+  + `</div><div class="zvl-detail-body">`
+  + (rows.length
+      ? rows.map(([k, v]) =>
+          `<div class="zvl-detail-row"><span class="zvl-detail-key">${escHtml(k)}</span>`
+        + `<span class="zvl-detail-val">${escHtml(v)}</span></div>`
+        ).join("")
+      : `<div class="zvl-detail-row"><span class="zvl-detail-key">No additional details available.</span></div>`
+    )
+  + `</div>`;
+
+  zvlDetail.classList.remove("hidden");
+}
+
+// ---------- Zammad Reports ----------
+const REPORT_API_URL = "https://zammad-dashboard.onrender.com/api/v1/report";
+
+function setRptStatus(text, type) {
+  rptStatus.textContent = text;
+  rptStatus.className   = "rpt-status" + (type ? " " + type : "");
+}
+
+async function generateReport() {
+  const zammadToken = Env.getSetting(SETTING_ZAMMAD_TOKEN, "");
+  if (!zammadToken) {
+    setRptStatus("Zammad token not configured — open Settings.", "err");
+    return;
+  }
+
+  const states = ["open", "new", "With MAR/DGRM/GAMA", "With RO"];
+  if (rptIncludeClosed.checked) states.push("closed", "pending close", "pending reminder");
+
+  const filters = { state: states };
+  const fromVal = rptFrom.value;
+  const toVal   = rptTo.value;
+  const imoVal  = rptVesselImo.value.trim();
+  if (fromVal) filters.updated_from = fromVal;
+  if (toVal)   filters.updated_to   = toVal;
+  if (imoVal)  filters.vessel_imo   = imoVal;
+
+  rptGenerateBtn.disabled = true;
+  setRptStatus("Generating PDF…", "info");
+
+  try {
+    const resp = await fetch(REPORT_API_URL, {
+      method:  "POST",
+      headers: { "Authorization": `Bearer ${zammadToken}`, "Content-Type": "application/json" },
+      body:    JSON.stringify({ format: "pdf", limit: 1000, filters })
+    });
+
+    if (resp.status === 401) { setRptStatus("Authentication failed (401). Check your Zammad token.", "err"); return; }
+    if (!resp.ok) {
+      const txt = await resp.text().catch(() => "");
+      setRptStatus(`Error ${resp.status}${txt ? ": " + txt.slice(0, 100) : ""}.`, "err");
+      return;
+    }
+
+    const blob    = await resp.blob();
+    const blobUrl = URL.createObjectURL(blob);
+
+    const today = new Date().toISOString().slice(0, 10);
+    let suffix = today;
+    if (fromVal && toVal) suffix = `${fromVal}_to_${toVal}`;
+    else if (fromVal)     suffix = `from_${fromVal}`;
+    else if (toVal)       suffix = `until_${toVal}`;
+    if (imoVal) suffix += `_imo${imoVal}`;
+
+    const a = document.createElement("a");
+    a.href     = blobUrl;
+    a.download = `maritime-report-${suffix}.pdf`;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+
+    setRptStatus("PDF downloaded.", "ok");
+    setTimeout(() => setRptStatus("", ""), 4000);
+  } catch (err) {
+    setRptStatus("Network error: " + (err.message || "unknown"), "err");
+  } finally {
+    rptGenerateBtn.disabled = false;
   }
 }
