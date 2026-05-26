@@ -49,7 +49,7 @@ function handleZvlFill(vessel) {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       const tab = tabs[0];
       if (!tab?.url?.startsWith("https://euromar.zammad.com/#ticket/")) {
-        resolve({ ok: false, error: "Open a Zammad ticket first" });
+        resolve({ ok: false, error: "Open a Zammad case first" });
         return;
       }
       chrome.tabs.sendMessage(tab.id, { type: "zvl_fill", vessel }, (resp) => {
