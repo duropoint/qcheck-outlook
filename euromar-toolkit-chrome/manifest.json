@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "EUROMAR Toolkit",
+  "version": "1.0.0",
+  "description": "Collection of internal EUROMAR tools — loads UI from the EUROMAR Toolkit hosted backend.",
+  "permissions": [
+    "contextMenus",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://duropoint.github.io/*",
+    "https://pscplatformalpha.onrender.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    },
+    "default_title": "EUROMAR Toolkit"
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  }
+}
