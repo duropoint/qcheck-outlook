@@ -1132,7 +1132,7 @@ function showZvlDetail(r) {
     const fillBtn = document.createElement("button");
     fillBtn.className = "run-btn";
     fillBtn.style.marginTop = "12px";
-    fillBtn.textContent = "Insert into Ticket";
+    fillBtn.textContent = "… into Zammad Case";
     fillBtn.addEventListener("click", () => insertVesselIntoZammadTicket(r, fillBtn));
     zvlDetailCard.appendChild(fillBtn);
   }
