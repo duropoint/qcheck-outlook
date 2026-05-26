@@ -3,20 +3,17 @@ const TOOLKIT_URL = "https://duropoint.github.io/qcheck-outlook/taskpane.html";
 const TOOLKIT_ORIGIN = new URL(TOOLKIT_URL).origin;
 const iframe = document.getElementById("contentFrame");
 
-// ── Initial load ──────────────────────────────────────────────────────────────
-// Apply any selection that was stashed by a context-menu click in background.js
+// Set src synchronously so the panel never opens blank
+iframe.src = TOOLKIT_URL;
 
-async function initIframe() {
-  const { pendingSelection } = await chrome.storage.session.get("pendingSelection");
-  if (pendingSelection) {
-    await chrome.storage.session.remove("pendingSelection");
+// Then check if a context-menu selection is waiting and update src if so
+chrome.storage.session.get("pendingSelection")
+  .then(({ pendingSelection }) => {
+    if (!pendingSelection) return;
+    chrome.storage.session.remove("pendingSelection");
     iframe.src = `${TOOLKIT_URL}?selection=${encodeURIComponent(pendingSelection)}`;
-  } else {
-    iframe.src = TOOLKIT_URL;
-  }
-}
-
-initIframe();
+  })
+  .catch(() => {}); // src is already set above if storage is unavailable
 
 // ── Live selection updates ────────────────────────────────────────────────────
 // If the panel is already open when a context-menu click arrives, react here
