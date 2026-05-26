@@ -33,9 +33,35 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.action === "toolkit-api") {
     handleApiCall(msg).then(sendResponse);
-    return true; // keep channel open for the async response
+    return true;
+  }
+  if (msg.action === "zvl_fill") {
+    handleZvlFill(msg.vessel).then(sendResponse);
+    return true;
   }
 });
+
+// ── Zammad fill bridge ────────────────────────────────────────────────────────
+// Finds the active Zammad ticket tab and tells the content script to fill fields.
+
+function handleZvlFill(vessel) {
+  return new Promise((resolve) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const tab = tabs[0];
+      if (!tab?.url?.startsWith("https://euromar.zammad.com/#ticket/")) {
+        resolve({ ok: false, error: "Open a Zammad ticket first" });
+        return;
+      }
+      chrome.tabs.sendMessage(tab.id, { type: "zvl_fill", vessel }, (resp) => {
+        if (chrome.runtime.lastError) {
+          resolve({ ok: false, error: "Content script not ready on this page" });
+          return;
+        }
+        resolve(resp ?? { ok: false, error: "No response from Zammad page" });
+      });
+    });
+  });
+}
 
 async function handleApiCall(msg) {
   const stored = await chrome.storage.local.get(["apiBase", "apiKey"]);
