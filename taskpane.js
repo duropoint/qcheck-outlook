@@ -9,6 +9,7 @@ const SETTING_COMPANIES_KEY = "qcheck_companies_key";
 const SETTING_ZAMMAD_TOKEN   = "qcheck_zammad_token";
 const SETTING_DASHBOARD_KEY  = "qcheck_dashboard_key";
 const SETTING_USER_EMAIL     = "qcheck_user_email";
+const SETTING_FAVORITES      = "qcheck_favorites";
 
 // ---------- DOM ----------
 const $ = (id) => document.getElementById(id);
@@ -61,6 +62,9 @@ const backBtn           = $("backBtn");
 const headerTitle       = $("headerTitle");
 const mainView          = $("mainView");
 const maritimeView      = $("maritimeView");
+const salesView         = $("salesView");
+const favoritesSection  = $("favoritesSection");
+const favList           = $("favList");
 const zammadSearchView  = $("zammadSearchView");
 const zammadReportsView = $("zammadReportsView");
 const zvlSearchInput    = $("zvlSearchInput");
@@ -86,6 +90,54 @@ let settingsReturnView = null;
 let zvlSearchTimer     = null;
 let zvlResults         = [];
 
+// Navigation-origin tracking — each sub-view remembers which view to return to
+// (supports reaching tools from Favorites on mainView, or from a category view)
+let formViewBack        = null; // back target for formView
+let zammadSearchBack    = null; // back target for zammadSearchView
+let zammadReportsBack   = null; // back target for zammadReportsView
+
+// Favorites — array of tool IDs, persisted via SETTING_FAVORITES
+let favorites = [];
+
+// ---------- Tool registry ----------
+// Single source of truth for tool metadata + navigation actions.
+// Adding a tool here automatically makes it available in Favorites.
+const TOOL_DEFS = {
+  "qcheck": {
+    icon: "✓",        // ✓
+    name: "Q Check",
+    desc: "PSC quality check by vessel or company IMO",
+    navigate(origin) {
+      formViewBack = origin || maritimeView;
+      showView(formView);
+    }
+  },
+  "vessel-search": {
+    icon: "🔍",  // 🔍
+    name: "Vessel Search",
+    desc: "Look up vessel data by name",
+    navigate(origin) {
+      zvlSearchInput.value = "";
+      zvlStatus.textContent = "";
+      zvlResultsList.innerHTML = "";
+      zvlDetail.classList.add("hidden");
+      zvlResultsList.classList.remove("hidden");
+      zammadSearchBack = origin || maritimeView;
+      showView(zammadSearchView);
+      setTimeout(() => zvlSearchInput.focus(), 80);
+    }
+  },
+  "zammad-reports": {
+    icon: "📄",  // 📄
+    name: "Zammad Reports",
+    desc: "Generate maritime PDF reports",
+    navigate(origin) {
+      zammadReportsBack = origin || maritimeView;
+      showView(zammadReportsView);
+    }
+  }
+};
+
 // ---------- Env init ----------
 Env.ready(() => {
   if (!Env.isOffice) {
@@ -103,8 +155,11 @@ Env.ready(() => {
     typeof Office.context.mailbox.item.body.setSelectedDataAsync === "function"
   );
 
+  loadFavorites();   // populate favorites[] before rendering
   bindEvents();
   initApp();
+  renderFavStars();
+  renderFavoritesSection();
   setupAutocomplete({ inputEl: companyImo,       pairedEl: companyName,       searchParam: "imo",  dropdownEl: $("companyImoDropdown") });
   setupAutocomplete({ inputEl: companyName,       pairedEl: companyImo,        searchParam: "name", dropdownEl: $("companyNameDropdown") });
   setupAutocomplete({ inputEl: vesselCompanyImo,  pairedEl: vesselCompanyName, searchParam: "imo",  dropdownEl: $("vesselCompanyImoDropdown") });
@@ -169,17 +224,32 @@ function bindEvents() {
     submitZammadTicket(vesselEscalateBtn, $("vesselZammadStatus"))
   );
   $("tileMaritimeBtn").addEventListener("click", () => showView(maritimeView));
-  $("tileQCheckBtn").addEventListener("click", () => showView(formView));
-  $("tileVesselSearchBtn").addEventListener("click", () => {
-    zvlSearchInput.value = "";
-    zvlStatus.textContent = "";
-    zvlResultsList.innerHTML = "";
-    zvlDetail.classList.add("hidden");
-    zvlResultsList.classList.remove("hidden");
-    showView(zammadSearchView);
-    setTimeout(() => zvlSearchInput.focus(), 80);
+  $("tileSalesBtn").addEventListener("click", () => showView(salesView));
+
+  $("tileQCheckBtn").addEventListener("click", () => {
+    formViewBack = maritimeView;
+    showView(formView);
   });
-  $("tileZammadReportsBtn").addEventListener("click", () => showView(zammadReportsView));
+  $("tileVesselSearchBtn").addEventListener("click", () => {
+    TOOL_DEFS["vessel-search"].navigate(maritimeView);
+  });
+  $("tileZammadReportsBtn").addEventListener("click", () => {
+    TOOL_DEFS["zammad-reports"].navigate(maritimeView);
+  });
+
+  // Sales sub-menu — Q Check re-routes to the same form (no duplication)
+  $("tileSalesQCheckBtn").addEventListener("click", () => {
+    formViewBack = salesView;
+    showView(formView);
+  });
+
+  // Star (favorites) buttons — stop propagation so tile click isn't also fired
+  document.querySelectorAll(".fav-star-btn").forEach(star => {
+    star.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleFavorite(star.dataset.tool);
+    });
+  });
   zvlSearchInput.addEventListener("input", onZvlInput);
   zvlBackToResults.addEventListener("click", () => {
     zvlDetail.classList.add("hidden");
@@ -394,7 +464,7 @@ async function testConnection() {
 
 // ---------- View switching ----------
 function showView(view) {
-  [mainView, maritimeView, zammadSearchView, zammadReportsView,
+  [mainView, maritimeView, salesView, zammadSearchView, zammadReportsView,
    formView, loadingView, errorView, confirmView, companyResult, vesselResult, settingsView]
     .filter(v => v)
     .forEach(v => v.classList.add("hidden"));
@@ -417,15 +487,19 @@ function updateNavChrome(view) {
     title = "Maritime";
     showSettings = !firstRun;
     backTarget = mainView;
+  } else if (id === "salesView") {
+    title = "Sales";
+    showSettings = !firstRun;
+    backTarget = mainView;
   } else if (id === "formView") {
     showToggle = !firstRun;
-    backTarget = maritimeView;
+    backTarget = formViewBack || maritimeView;
   } else if (id === "zammadSearchView") {
     title = "Vessel Search";
-    backTarget = maritimeView;
+    backTarget = zammadSearchBack || maritimeView;
   } else if (id === "zammadReportsView") {
     title = "Zammad Reports";
-    backTarget = maritimeView;
+    backTarget = zammadReportsBack || maritimeView;
   } else if (id === "settingsView") {
     title = "Settings";
     if (!firstRun) backTarget = "settingsReturn";
@@ -1149,6 +1223,84 @@ function insertVesselIntoZammadTicket(vessel, btn) {
   }
   window.addEventListener("message", handleResp);
   window.parent.postMessage({ type: "zvl_fill", vessel, requestId }, "*");
+}
+
+// ---------- Favorites ----------
+
+function loadFavorites() {
+  try {
+    const raw = Env.getSetting(SETTING_FAVORITES, "");
+    favorites = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(favorites)) favorites = [];
+  } catch (_) {
+    favorites = [];
+  }
+}
+
+async function saveFavorites() {
+  try {
+    await Env.setSetting(SETTING_FAVORITES, JSON.stringify(favorites));
+  } catch (e) {
+    console.warn("Could not persist favorites:", e);
+  }
+}
+
+function toggleFavorite(toolId) {
+  if (!TOOL_DEFS[toolId]) return;
+  const idx = favorites.indexOf(toolId);
+  if (idx === -1) {
+    favorites.push(toolId);
+  } else {
+    favorites.splice(idx, 1);
+  }
+  saveFavorites();
+  renderFavStars();
+  renderFavoritesSection();
+}
+
+/** Update all ★/☆ star buttons already in the DOM to reflect current favorites. */
+function renderFavStars() {
+  document.querySelectorAll(".fav-star-btn").forEach(star => {
+    const toolId = star.dataset.tool;
+    const active = favorites.includes(toolId);
+    star.textContent = active ? "★" : "☆"; // ★ filled / ☆ outline
+    star.title = active ? "Remove from Favorites" : "Add to Favorites";
+    star.classList.toggle("fav-active", active);
+  });
+}
+
+/** Rebuild the Favorites section on the main page from the current favorites array. */
+function renderFavoritesSection() {
+  // Remove tiles generated by a previous render (keep the static label)
+  favList.innerHTML = "";
+
+  const validFavs = favorites.filter(id => TOOL_DEFS[id]);
+  favoritesSection.classList.toggle("hidden", validFavs.length === 0);
+
+  validFavs.forEach(toolId => {
+    const tool = TOOL_DEFS[toolId];
+
+    const btn = document.createElement("button");
+    btn.className = "feature-tile";
+    btn.innerHTML =
+      `<span class="feature-icon">${tool.icon}</span>`
+    + `<div class="feature-info">`
+    + `<div class="feature-name">${escHtml(tool.name)}</div>`
+    + `<div class="feature-desc">${escHtml(tool.desc)}</div>`
+    + `</div>`
+    + `<span class="fav-star-btn fav-active" data-tool="${escHtml(toolId)}" title="Remove from Favorites">★</span>`;
+
+    // Tile click → navigate to the tool, back button returns to mainView
+    btn.addEventListener("click", () => tool.navigate(mainView));
+
+    // Star click → remove from favorites (stop propagation so tile click isn't fired too)
+    btn.querySelector(".fav-star-btn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleFavorite(toolId);
+    });
+
+    favList.appendChild(btn);
+  });
 }
 
 // ---------- Zammad Reports ----------
