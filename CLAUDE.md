@@ -84,7 +84,7 @@ Five settings stored per-environment (see `env.js` table above):
 - Debounced search via `GET /api/ships/search?name=…`
 - Results list → detail card
 - In Chrome extension context (`Env.env === "extension"` or `?context=extension` URL param): shows **"… into Zammad Case"** button
-- Button routes through `window.parent.postMessage({ type: "zvl_fill", vessel })` → `popup.js` → `background.js` → `content.js` on the active Zammad tab
+- Button routes through `window.parent.postMessage({ type: "zvl_fill", vessel })` → `popup.js` → `background.js` → `chrome.scripting.executeScript` injecting `injectFillVessel` directly into the active Zammad tab (no content script needed)
 
 **Zammad Reports (Maritime → Zammad Reports)**
 - Generates a PDF report via `POST https://zammad-dashboard.onrender.com/api/v1/report`
