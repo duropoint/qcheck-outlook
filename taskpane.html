@@ -25,6 +25,12 @@
     <!-- Main menu -->
     <div class="view" id="mainView">
       <div class="view-body main-body">
+        <!-- Favorites section (hidden until at least one tool is starred) -->
+        <div id="favoritesSection" class="favorites-section hidden">
+          <div class="fav-section-label">&#9733; Favorites</div>
+          <div class="feature-list" id="favList"></div>
+        </div>
+
         <div class="menu-grid">
           <button class="menu-tile" id="tileMaritimeBtn">
             <span class="menu-icon">&#9875;</span>
@@ -40,8 +46,7 @@
             <span class="menu-icon">&#128203;</span>
             <span class="menu-label">Registration</span>
           </button>
-          <button class="menu-tile" disabled>
-            <span class="menu-soon">Soon</span>
+          <button class="menu-tile" id="tileSalesBtn">
             <span class="menu-icon">&#128188;</span>
             <span class="menu-label">Sales</span>
           </button>
@@ -59,6 +64,7 @@
               <div class="feature-name">Q Check</div>
               <div class="feature-desc">PSC quality check by vessel or company IMO</div>
             </div>
+            <span class="fav-star-btn" data-tool="qcheck" title="Add to Favorites">&#9734;</span>
           </button>
           <button class="feature-tile" id="tileVesselSearchBtn">
             <span class="feature-icon">&#128269;</span>
@@ -66,6 +72,7 @@
               <div class="feature-name">Vessel Search</div>
               <div class="feature-desc">Look up vessel data by name</div>
             </div>
+            <span class="fav-star-btn" data-tool="vessel-search" title="Add to Favorites">&#9734;</span>
           </button>
           <button class="feature-tile" id="tileZammadReportsBtn">
             <span class="feature-icon">&#128196;</span>
@@ -73,6 +80,23 @@
               <div class="feature-name">Zammad Reports</div>
               <div class="feature-desc">Generate maritime PDF reports</div>
             </div>
+            <span class="fav-star-btn" data-tool="zammad-reports" title="Add to Favorites">&#9734;</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sales sub-menu -->
+    <div class="view hidden" id="salesView">
+      <div class="view-body">
+        <div class="feature-list">
+          <button class="feature-tile" id="tileSalesQCheckBtn">
+            <span class="feature-icon">&#10003;</span>
+            <div class="feature-info">
+              <div class="feature-name">Q Check</div>
+              <div class="feature-desc">PSC quality check by vessel or company IMO</div>
+            </div>
+            <span class="fav-star-btn" data-tool="qcheck" title="Add to Favorites">&#9734;</span>
           </button>
         </div>
       </div>
