@@ -87,11 +87,46 @@ window.addEventListener("message", async (event) => {
     }
 
     case "sfbr_inject": {
+      // Handled directly here — no background.js hop needed.
+      // Extension pages (including side panels) can call chrome.scripting directly,
+      // and doing it here avoids the MV3 service-worker response-dropping issue.
       const requestId = msg.requestId ?? `${Date.now()}-${Math.random()}`;
+      const SFBR_ORIGINS = [
+        "https://seafarers.eu-registry.com",
+        "https://seafarers-web-test.idego.io"
+      ];
       try {
-        const response = await chrome.runtime.sendMessage({ action: "sfbr_inject" });
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!tab) throw new Error("No active tab found.");
+
+        // tab.url is only populated when the manifest includes the 'tabs' permission.
+        // If it is available, verify we're on the Seafarers Panel; otherwise trust the user.
+        if (tab.url) {
+          const origin = new URL(tab.url).origin;
+          if (!SFBR_ORIGINS.includes(origin)) {
+            throw new Error(
+              "Active tab is not the Seafarers Panel. Open seafarers.eu-registry.com and try again."
+            );
+          }
+        }
+
+        await chrome.scripting.insertCSS({
+          target: { tabId: tab.id },
+          files:  ["sfbr-styles.css"]
+        });
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files:  ["sfbr-seafarers.js"],
+          world:  "MAIN"
+        });
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files:  ["sfbr-relay.js"],
+          world:  "ISOLATED"
+        });
+
         iframe.contentWindow.postMessage(
-          { type: "sfbr_inject_response", requestId, ...response },
+          { type: "sfbr_inject_response", requestId, ok: true },
           TOOLKIT_ORIGIN
         );
       } catch (err) {
