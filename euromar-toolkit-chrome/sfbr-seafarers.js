@@ -1,12 +1,13 @@
 // sfbr-seafarers.js — injected in MAIN world on the Seafarers Panel tab.
 //
-// Derived from seafarers-zoho-bridge v1.8.1.
-// Key change vs standalone extension:
-//   Instead of window.open(zohoUrl), fires a CustomEvent("sfbr:open_zoho")
-//   on the document so that sfbr-relay.js (ISOLATED world) can forward the
-//   URL to the background service worker, which creates and injects the Zoho tab.
+// Adds a "Send to Zoho BMAR" button next to the form's submit button.
+// When clicked, serialises the visible seafarer fields and signals the
+// extension (via a DOM attribute that sfbr-relay.js watches) to open the
+// Zoho form in a new tab and auto-fill it.
 //
-// Also adds SPA navigation re-init so the button survives page transitions.
+// Uses DOM-attribute signalling instead of CustomEvent.detail because
+// Chrome does not reliably forward CustomEvent detail across the
+// MAIN ↔ ISOLATED world boundary in all versions.
 
 (function () {
   'use strict';
@@ -15,16 +16,23 @@
   if (window.__sfbrInjected) return;
   window.__sfbrInjected = true;
 
+  // ── Button injection ────────────────────────────────────────────────────────
+
   function init() {
-    const pageTitle = document.querySelector('h2');
-    if (!pageTitle || !pageTitle.textContent.includes('Review Extracted Data')) return;
+    // Try to add the button whenever there is a submit button on the page.
+    // addTransferButton() already guards against duplicates.
     addTransferButton();
   }
 
   function addTransferButton() {
-    const submitBtn = document.querySelector('button[type="submit"]');
+    if (document.getElementById('zoho-transfer-btn')) return; // already present
+
+    // Find submit button or any prominent action button
+    const submitBtn = document.querySelector('button[type="submit"]')
+      || Array.from(document.querySelectorAll('button'))
+           .find(b => /confirm|submit|save/i.test((b.textContent || '').trim()));
+
     if (!submitBtn) return;
-    if (document.getElementById('zoho-transfer-btn')) return;
 
     const transferBtn = document.createElement('button');
     transferBtn.id = 'zoho-transfer-btn';
@@ -40,6 +48,8 @@
     transferBtn.addEventListener('click', handleTransfer);
     submitBtn.parentNode.insertBefore(transferBtn, submitBtn);
   }
+
+  // ── Data extraction ─────────────────────────────────────────────────────────
 
   function extractData() {
     const getValue = (id) => { const el = document.getElementById(id); return el ? (el.value || '') : ''; };
@@ -99,12 +109,14 @@
     };
   }
 
+  // ── Transfer handler ────────────────────────────────────────────────────────
+
   function handleTransfer() {
     const btn = document.getElementById('zoho-transfer-btn');
     try {
       const data = extractData();
       if (!data.fullName || data.fullName.trim() === '') {
-        showNotification('Error: Seafarer name not found', 'error');
+        showNotification('Error: Seafarer name not found. Are you on the Review Extracted Data page?', 'error');
         return;
       }
 
@@ -121,15 +133,19 @@
       btn.classList.add('success');
       showNotification(`Data for ${data.fullName} sent to Zoho`, 'success');
 
-      // ── KEY CHANGE from standalone extension ──────────────────────────────
-      // Fire a CustomEvent instead of window.open so that sfbr-relay.js
-      // (running in the ISOLATED world) can hand it off to background.js,
-      // which creates the Zoho tab and injects the fill script automatically.
+      // Signal sfbr-relay.js (ISOLATED world) via a DOM attribute on a temporary
+      // element. Using DOM attributes is reliable across MAIN ↔ ISOLATED worlds,
+      // unlike CustomEvent.detail which Chrome can silently strip.
       setTimeout(() => {
-        document.dispatchEvent(new CustomEvent('sfbr:open_zoho', { detail: { url: zohoUrl } }));
+        const signal = document.createElement('span');
+        signal.id = '__sfbr_zoho_signal__';
+        signal.setAttribute('data-zoho-url', zohoUrl);
+        signal.style.display = 'none';
+        document.documentElement.appendChild(signal);
+        // sfbr-relay.js removes the element after reading it
       }, 400);
 
-      // Auto-submit the seafarers form after transfer (same as standalone extension)
+      // Auto-submit the seafarers form after transfer
       setTimeout(() => {
         const confirmBtn = document.querySelector('button[type="submit"]')
           || Array.from(document.querySelectorAll('button'))
@@ -154,6 +170,8 @@
     }
   }
 
+  // ── Notification ────────────────────────────────────────────────────────────
+
   function showNotification(message, type) {
     const existing = document.querySelector('.seafarer-notification');
     if (existing) existing.remove();
@@ -164,14 +182,15 @@
     setTimeout(() => { n.classList.add('fade-out'); setTimeout(() => n.remove(), 300); }, 4000);
   }
 
-  // Initial run
-  init();
-  setTimeout(init, 800);
+  // ── Boot ────────────────────────────────────────────────────────────────────
 
-  // Re-init on SPA navigation (history API)
+  init();
+  setTimeout(init, 800);   // second pass for slow-rendering SPAs
+
+  // Re-init on SPA navigation so the button survives page transitions
   const _origPush    = history.pushState.bind(history);
   const _origReplace = history.replaceState.bind(history);
-  history.pushState = function (...a) { _origPush(...a);    setTimeout(init, 600); };
+  history.pushState    = function (...a) { _origPush(...a);    setTimeout(init, 600); };
   history.replaceState = function (...a) { _origReplace(...a); setTimeout(init, 600); };
   window.addEventListener('popstate', () => setTimeout(init, 600));
 })();

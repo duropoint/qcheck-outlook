@@ -1693,7 +1693,7 @@ function sendSfbrInject() {
     if (!event.data || event.data.type !== "sfbr_inject_response") return;
     if (event.data.requestId !== requestId) return;
     if (event.data.ok) {
-      settle(true, "✓ Bridge injected — the \"Send to Zoho BMAR\" button should now appear on the Seafarers page.");
+      settle(true, "✓ Bridge injected. Navigate to the Review Extracted Data step in the Seafarers Panel — the \"Send to Zoho BMAR\" button will appear there.");
     } else {
       settle(false, event.data.error || "Injection failed.");
     }

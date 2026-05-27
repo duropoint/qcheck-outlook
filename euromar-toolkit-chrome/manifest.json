@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "EUROMAR Toolkit",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Collection of internal EUROMAR tools — loads UI from the EUROMAR Toolkit hosted backend.",
   "permissions": [
     "contextMenus",

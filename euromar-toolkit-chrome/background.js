@@ -36,11 +36,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     handleZvlFill(msg.vessel).then(sendResponse);
     return true;
   }
-  if (msg.action === "sfbr_inject") {
-    // Called by popup.js when the user clicks "Inject Bridge"
-    handleSfbrInject().then(sendResponse);
-    return true;
-  }
   if (msg.action === "sfbr_open_zoho") {
     // Called by the relay script (ISOLATED world) in the Seafarers tab
     handleSfbrOpenZoho(msg.url).catch(console.error);
@@ -131,56 +126,16 @@ function injectFillVessel(vessel) {
 
 // ── Seafarers → Zoho BMAR Bridge ─────────────────────────────────────────────
 //
-// Flow:
-//   1. sfbr_inject  → inject sfbr-seafarers.js (MAIN) + sfbr-relay.js (ISOLATED)
-//      + sfbr-styles.css into the active Seafarers tab.
-//   2. User clicks "Enviar para Zoho BMAR" on that tab.
-//      sfbr-seafarers.js dispatches a CustomEvent("sfbr:open_zoho") on the DOM.
-//      sfbr-relay.js (ISOLATED) catches it and calls chrome.runtime.sendMessage.
-//   3. sfbr_open_zoho handler creates the Zoho tab, waits for it to load, then
+// Injection (sfbr_inject) is now handled directly in popup.js to avoid the
+// MV3 service-worker response-dropping issue.
+//
+// Remaining flow handled here:
+//   1. User clicks "Send to Zoho BMAR" on the Seafarers Panel.
+//      sfbr-seafarers.js (MAIN) writes the URL to a DOM attribute and
+//      sfbr-relay.js (ISOLATED) picks it up via MutationObserver, then calls
+//      chrome.runtime.sendMessage({ action: "sfbr_open_zoho", url }).
+//   2. sfbr_open_zoho handler creates the Zoho tab, waits for it to load, then
 //      injects sfbr-zoho.js (MAIN) + sfbr-styles.css — the fill banner appears.
-
-const SEAFARERS_ORIGINS = [
-  "https://seafarers.eu-registry.com",
-  "https://seafarers-web-test.idego.io"
-];
-
-async function handleSfbrInject() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab) return { ok: false, error: "No active tab found." };
-
-  const tabOrigin = tab.url ? new URL(tab.url).origin : "";
-  const isSeafarersTab = SEAFARERS_ORIGINS.includes(tabOrigin);
-  if (!isSeafarersTab) {
-    return {
-      ok: false,
-      error: "Active tab is not the Seafarers Panel. Navigate to seafarers.eu-registry.com first."
-    };
-  }
-
-  try {
-    // 1. Inject styles
-    await chrome.scripting.insertCSS({
-      target: { tabId: tab.id },
-      files: ["sfbr-styles.css"]
-    });
-    // 2. Inject MAIN world script (adds button, extracts data, fires CustomEvent)
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ["sfbr-seafarers.js"],
-      world: "MAIN"
-    });
-    // 3. Inject ISOLATED relay (bridges CustomEvent → chrome.runtime.sendMessage)
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ["sfbr-relay.js"],
-      world: "ISOLATED"
-    });
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: err.message };
-  }
-}
 
 async function handleSfbrOpenZoho(url) {
   // Open the Zoho form in a new tab (URL already contains the base64 data in the hash)
