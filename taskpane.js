@@ -635,7 +635,7 @@ async function runQCheck() {
       url:  `${apiBase}/api/v1/qcheck/vessel`,
       apiKey,
       body,
-      onOk: (data) => renderVesselResult({ vImo, vNm, data })
+      onOk: (data) => renderVesselResult({ vImo, vNm, cImo, cNm, data })
     });
   }
 }
@@ -714,7 +714,7 @@ function renderCompanyResult({ imo, name, data }) {
   showView(companyResult);
 }
 
-function renderVesselResult({ vImo, vNm, data }) {
+function renderVesselResult({ vImo, vNm, cImo, cNm, data }) {
   $("vesselResultName").textContent = vNm || data.vessel_name || "Vessel";
   $("vesselResultImo").textContent  = `IMO: ${vImo}`;
   const a = data.assessment || {};
@@ -725,9 +725,19 @@ function renderVesselResult({ vImo, vNm, data }) {
   setPill($("vesselPscPill"),     a.psc);
   setPill($("vesselCompanyPill"), a.company);
 
-  // ISM Manager — hide card initially; enrichVesselWithIsmData() will show it
-  // if the ship-search API returns this data (Q Check API doesn't include it).
-  $("vesselIsmCard").classList.add("hidden");
+  // ISM Manager — prefer data the user already entered in the form.
+  // Fall back to async enrichment from the ships API if the form was blank.
+  const ismCard = $("vesselIsmCard");
+  if (cImo) {
+    $("vesselIsmName").textContent = cNm || "";
+    $("vesselIsmImo").textContent  = `IMO ${cImo}`;
+    ismCard.classList.remove("hidden");
+    // Mirror into data so buildVesselTable() picks it up via its normal path
+    data.ism_manager     = cNm  || "";
+    data.ism_manager_imo = cImo || "";
+  } else {
+    ismCard.classList.add("hidden");
+  }
 
   const url = data.shareable_url || "";
   $("vesselShareUrl").textContent = url;
@@ -758,9 +768,8 @@ function renderVesselResult({ vImo, vNm, data }) {
 
   showView(vesselResult);
 
-  // Enrich with ISM manager data from the ships search API (non-blocking).
-  // Q Check API doesn't return ISM fields, so we fetch them separately.
-  enrichVesselWithIsmData(vImo, vNm || data.vessel_name || "");
+  // If no ISM data was entered in the form, try enriching from the ships API
+  if (!cImo) enrichVesselWithIsmData(vImo, vNm || data.vessel_name || "");
 }
 
 /**
@@ -990,12 +999,13 @@ function buildVesselTable({ vImo, vNm, data }) {
   const url     = data.shareable_url || "";
   const ismName = data.ism_manager     || "";
   const ismImo  = data.ism_manager_imo || "";
-  const ismRow  = ismName
+  // Show ISM row whenever either name or IMO is present
+  const ismRow  = (ismName || ismImo)
     ? `<tr style="${TABLE_ROW_STYLE}">
     <td style="${TABLE_CELL_STYLE}">ISM Manager</td>
     <td style="${TABLE_CELL_R_STYLE}">
-      <span style="font-size:13px;font-weight:600;color:#1a2332">${escHtml(ismName)}</span>
-      ${ismImo ? `<span style="font-size:11px;color:#6b7280;display:block">IMO ${escHtml(String(ismImo))}</span>` : ""}
+      ${ismName ? `<span style="font-size:13px;font-weight:600;color:#1a2332">${escHtml(ismName)}</span>` : ""}
+      ${ismImo  ? `<span style="font-size:11px;color:#6b7280;display:block">IMO ${escHtml(String(ismImo))}</span>` : ""}
     </td>
   </tr>`
     : "";
