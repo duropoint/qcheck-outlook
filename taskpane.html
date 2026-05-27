@@ -73,6 +73,14 @@
             </div>
             <span class="fav-star-btn" data-tool="vessel-search" title="Add to Favorites">&#9734;</span>
           </button>
+          <button class="feature-tile" id="tileCompanySearchBtn">
+            <span class="feature-icon">&#127970;</span>
+            <div class="feature-info">
+              <div class="feature-name">Company Search</div>
+              <div class="feature-desc">Look up company data and fleet by name or IMO</div>
+            </div>
+            <span class="fav-star-btn" data-tool="company-search" title="Add to Favorites">&#9734;</span>
+          </button>
           <button class="feature-tile" id="tileZammadReportsBtn">
             <span class="feature-icon">&#128196;</span>
             <div class="feature-info">
@@ -167,6 +175,30 @@
         <div id="zvlDetail" class="zvl-detail hidden">
           <button class="zvl-back-btn" id="zvlBackToResults">&#8592; Results</button>
           <div id="zvlDetailCard" class="zvl-detail-card"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Company Search -->
+    <div class="view hidden" id="companySearchView">
+      <div class="view-body">
+        <div class="zvl-search-wrap">
+          <input type="text" id="csSearchInput" placeholder="Company name or IMO…" autocomplete="off" />
+        </div>
+        <div id="csStatus" class="zvl-status"></div>
+        <ul id="csResultsList" class="zvl-list"></ul>
+        <div id="csDetail" class="hidden">
+          <button class="zvl-back-btn" id="csBackToSearch">&#8592; Results</button>
+          <div id="csDetailCard" class="zvl-detail-card"></div>
+          <div class="cs-fleet-section">
+            <div class="cs-fleet-label">Fleet</div>
+            <div id="csFleetStatus" class="cs-fleet-status"></div>
+            <ul id="csFleetList" class="zvl-list"></ul>
+          </div>
+        </div>
+        <div id="csVesselSection" class="hidden">
+          <button class="zvl-back-btn" id="csBackToCompany">&#8592; Company</button>
+          <div id="csVesselDetailCard" class="zvl-detail-card"></div>
         </div>
       </div>
     </div>

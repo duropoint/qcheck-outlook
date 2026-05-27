@@ -75,6 +75,18 @@ const zvlResultsList    = $("zvlResultsList");
 const zvlDetail         = $("zvlDetail");
 const zvlDetailCard     = $("zvlDetailCard");
 const zvlBackToResults  = $("zvlBackToResults");
+const companySearchView  = $("companySearchView");
+const csSearchInput      = $("csSearchInput");
+const csStatus           = $("csStatus");
+const csResultsList      = $("csResultsList");
+const csDetail           = $("csDetail");
+const csDetailCard       = $("csDetailCard");
+const csFleetStatus      = $("csFleetStatus");
+const csFleetList        = $("csFleetList");
+const csBackToSearch     = $("csBackToSearch");
+const csVesselSection    = $("csVesselSection");
+const csVesselDetailCard = $("csVesselDetailCard");
+const csBackToCompany    = $("csBackToCompany");
 const rptFrom           = $("rptFrom");
 const rptTo             = $("rptTo");
 const rptVesselImo      = $("rptVesselImo");
@@ -98,6 +110,11 @@ let formViewBack        = null; // back target for formView
 let zammadSearchBack    = null; // back target for zammadSearchView
 let zammadReportsBack   = null; // back target for zammadReportsView
 let bridgeViewBack      = null; // back target for seafarersBridgeView
+let companySearchBack   = null; // back target for companySearchView
+
+let csSearchTimer    = null;
+let csResults        = [];
+let csCurrentCompany = null;
 
 // Favorites — array of tool IDs, persisted via SETTING_FAVORITES
 let favorites = [];
@@ -137,6 +154,22 @@ const TOOL_DEFS = {
     navigate(origin) {
       zammadReportsBack = origin || maritimeView;
       showView(zammadReportsView);
+    }
+  },
+  "company-search": {
+    icon: "🏢",  // 🏢
+    name: "Company Search",
+    desc: "Look up company data and fleet by name or IMO",
+    navigate(origin) {
+      csSearchInput.value = "";
+      csStatus.textContent = "";
+      csResultsList.innerHTML = "";
+      csResultsList.classList.remove("hidden");
+      csDetail.classList.add("hidden");
+      csVesselSection.classList.add("hidden");
+      companySearchBack = origin || maritimeView;
+      showView(companySearchView);
+      setTimeout(() => csSearchInput.focus(), 80);
     }
   },
   "zoho-bridge": {
@@ -274,6 +307,9 @@ function bindEvents() {
   $("tileVesselSearchBtn").addEventListener("click", () => {
     TOOL_DEFS["vessel-search"].navigate(maritimeView);
   });
+  $("tileCompanySearchBtn").addEventListener("click", () => {
+    TOOL_DEFS["company-search"].navigate(maritimeView);
+  });
   $("tileZammadReportsBtn").addEventListener("click", () => {
     TOOL_DEFS["zammad-reports"].navigate(maritimeView);
   });
@@ -303,6 +339,15 @@ function bindEvents() {
   zvlBackToResults.addEventListener("click", () => {
     zvlDetail.classList.add("hidden");
     zvlResultsList.classList.remove("hidden");
+  });
+  csSearchInput.addEventListener("input", onCsInput);
+  csBackToSearch.addEventListener("click", () => {
+    csDetail.classList.add("hidden");
+    csResultsList.classList.remove("hidden");
+  });
+  csBackToCompany.addEventListener("click", () => {
+    csVesselSection.classList.add("hidden");
+    csDetail.classList.remove("hidden");
   });
   rptGenerateBtn.addEventListener("click", generateReport);
 }
@@ -514,7 +559,7 @@ async function testConnection() {
 // ---------- View switching ----------
 function showView(view) {
   [mainView, maritimeView, salesView, seafarersView, seafarersBridgeView,
-   zammadSearchView, zammadReportsView,
+   zammadSearchView, zammadReportsView, companySearchView,
    formView, loadingView, errorView, confirmView, companyResult, vesselResult, settingsView]
     .filter(v => v)
     .forEach(v => v.classList.add("hidden"));
@@ -554,6 +599,9 @@ function updateNavChrome(view) {
   } else if (id === "zammadSearchView") {
     title = "Vessel Search";
     backTarget = zammadSearchBack || maritimeView;
+  } else if (id === "companySearchView") {
+    title = "Company Search";
+    backTarget = companySearchBack || maritimeView;
   } else if (id === "zammadReportsView") {
     title = "Zammad Reports";
     backTarget = zammadReportsBack || maritimeView;
@@ -1355,6 +1403,171 @@ function insertVesselIntoZammadTicket(vessel, btn) {
   }
   window.addEventListener("message", handleResp);
   window.parent.postMessage({ type: "zvl_fill", vessel, requestId }, "*");
+}
+
+// ---------- Company Search ----------
+
+function onCsInput() {
+  const q = csSearchInput.value.trim();
+  clearTimeout(csSearchTimer);
+  csDetail.classList.add("hidden");
+  csVesselSection.classList.add("hidden");
+  csResultsList.classList.remove("hidden");
+  if (q.length < 2) {
+    csResultsList.innerHTML = "";
+    csStatus.textContent = q.length === 1 ? "Type at least 2 characters." : "";
+    return;
+  }
+  csStatus.textContent = "Searching…";
+  csSearchTimer = setTimeout(() => doCsSearch(q), 300);
+}
+
+async function doCsSearch(q) {
+  const apiBase   = (Env.getSetting(SETTING_API_BASE, DEFAULT_API_BASE) || DEFAULT_API_BASE).replace(/\/$/, "");
+  const searchKey = Env.getSetting(SETTING_COMPANIES_KEY, "") || "";
+  if (!searchKey) {
+    csStatus.textContent = "Companies Search key not configured — open Settings.";
+    return;
+  }
+  const params = new URLSearchParams();
+  if (/^\d+$/.test(q)) {
+    params.set("imo", q);
+  } else {
+    params.set("name", q);
+  }
+  try {
+    const resp = await fetch(`${apiBase}/api/companies/search?${params}`, {
+      headers: { "X-API-Key": searchKey }
+    });
+    if (resp.status === 401) { csStatus.textContent = "API key rejected (401)."; return; }
+    if (!resp.ok)             { csStatus.textContent = `Error ${resp.status}.`;   return; }
+    const data = await resp.json();
+    csResults = (data.success && Array.isArray(data.results)) ? data.results : [];
+    if (!csResults.length) {
+      csStatus.textContent = "No companies found.";
+      csResultsList.innerHTML = "";
+    } else {
+      csStatus.textContent = `${csResults.length} result${csResults.length !== 1 ? "s" : ""}`;
+      renderCsResults(csResults);
+    }
+  } catch (err) {
+    csStatus.textContent = "Network error: " + (err.message || "unknown");
+  }
+}
+
+function renderCsResults(results) {
+  csResultsList.innerHTML = "";
+  results.forEach((r) => {
+    const li = document.createElement("li");
+    li.className = "zvl-result-item";
+    li.innerHTML = `<div class="zvl-result-name">${escHtml(r.company_name || "Unknown")}</div>`
+                 + `<div class="zvl-result-imo">IMO ${escHtml(String(r.company_imo || "—"))}</div>`;
+    li.addEventListener("click", () => showCsDetail(r));
+    csResultsList.appendChild(li);
+  });
+}
+
+function showCsDetail(company) {
+  csCurrentCompany = company;
+  csResultsList.classList.add("hidden");
+  csVesselSection.classList.add("hidden");
+  csStatus.textContent = "";
+
+  const fleetAgeStr = company.fleet_age != null
+    ? `${Number(company.fleet_age).toFixed(1)} yrs` : "—";
+  const vesselQty   = company.vessels_qty != null ? String(company.vessels_qty) : "—";
+
+  csDetailCard.innerHTML =
+    `<div class="zvl-detail-header">`
+  + `<div class="zvl-detail-vessel-name">${escHtml(company.company_name || "Unknown")}</div>`
+  + `<div class="zvl-detail-imo">IMO ${escHtml(String(company.company_imo || "—"))}</div>`
+  + `</div>`
+  + `<div class="cs-stats-grid">`
+  + `<div class="cs-stat-item">`
+  +   `<div class="cs-stat-label">Managed Vessels</div>`
+  +   `<div class="cs-stat-value">${escHtml(vesselQty)}</div>`
+  + `</div>`
+  + `<div class="cs-stat-item">`
+  +   `<div class="cs-stat-label">Avg. Fleet Age</div>`
+  +   `<div class="cs-stat-value">${escHtml(fleetAgeStr)}</div>`
+  + `</div>`
+  + `</div>`;
+
+  csFleetStatus.textContent = "Loading fleet…";
+  csFleetList.innerHTML     = "";
+  csDetail.classList.remove("hidden");
+
+  loadCsFleet(company.company_imo);
+}
+
+async function loadCsFleet(companyImo) {
+  const apiBase   = (Env.getSetting(SETTING_API_BASE, DEFAULT_API_BASE) || DEFAULT_API_BASE).replace(/\/$/, "");
+  const searchKey = Env.getSetting(SETTING_COMPANIES_KEY, "") || "";
+  if (!searchKey) {
+    csFleetStatus.textContent = "Companies Search key not configured.";
+    return;
+  }
+  try {
+    const resp = await fetch(
+      `${apiBase}${SHIP_SEARCH_PATH}?company_imo=${encodeURIComponent(companyImo)}`,
+      { headers: { "X-API-Key": searchKey } }
+    );
+    if (!resp.ok) {
+      csFleetStatus.textContent = `Error loading fleet (${resp.status}).`;
+      return;
+    }
+    const data    = await resp.json();
+    const vessels = data.results || [];
+    if (!vessels.length) {
+      csFleetStatus.textContent = "No vessels found in fleet.";
+      return;
+    }
+    csFleetStatus.textContent = `${vessels.length} vessel${vessels.length !== 1 ? "s" : ""}`;
+    csFleetList.innerHTML = "";
+    vessels.forEach((v) => {
+      const li = document.createElement("li");
+      li.className = "zvl-result-item";
+      li.innerHTML = `<div class="zvl-result-name">${escHtml(v.vessel_name || "Unknown")}</div>`
+                   + `<div class="zvl-result-imo">IMO ${escHtml(String(v.vessel_imo || "—"))}</div>`;
+      li.addEventListener("click", () => showCsVesselDetail(v));
+      csFleetList.appendChild(li);
+    });
+  } catch (err) {
+    csFleetStatus.textContent = "Network error: " + (err.message || "unknown");
+  }
+}
+
+function showCsVesselDetail(r) {
+  csDetail.classList.add("hidden");
+
+  const fmtNum = (v) => {
+    const n = Number(String(v || "").replace(/[^\d.]/g, ""));
+    return Number.isFinite(n) && n > 0 ? n.toLocaleString("en-US") : null;
+  };
+
+  const rows = [
+    r.vessel_type             ? ["Type",          r.vessel_type]                                                             : null,
+    r.class_society           ? ["Class Society", r.class_society]                                                           : null,
+    fmtNum(r.gross_tonnage)   ? ["Gross Tonnage", fmtNum(r.gross_tonnage)]                                                   : null,
+    r.year_built              ? ["Year Built",    String(r.year_built)]                                                      : null,
+    r.ism_manager             ? ["ISM Manager",   r.ism_manager + (r.ism_manager_imo ? ` (IMO ${r.ism_manager_imo})` : "")] : null
+  ].filter(Boolean);
+
+  csVesselDetailCard.innerHTML =
+    `<div class="zvl-detail-header">`
+  + `<div class="zvl-detail-vessel-name">${escHtml(r.vessel_name || "Unknown")}</div>`
+  + `<div class="zvl-detail-imo">IMO ${escHtml(String(r.vessel_imo || "—"))}</div>`
+  + `</div><div class="zvl-detail-body">`
+  + (rows.length
+      ? rows.map(([k, v]) =>
+          `<div class="zvl-detail-row"><span class="zvl-detail-key">${escHtml(k)}</span>`
+        + `<span class="zvl-detail-val">${escHtml(v)}</span></div>`
+        ).join("")
+      : `<div class="zvl-detail-row"><span class="zvl-detail-key">No additional details available.</span></div>`
+    )
+  + `</div>`;
+
+  csVesselSection.classList.remove("hidden");
 }
 
 // ---------- Favorites ----------
