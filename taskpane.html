@@ -36,8 +36,7 @@
             <span class="menu-icon">&#9875;</span>
             <span class="menu-label">Maritime</span>
           </button>
-          <button class="menu-tile" disabled>
-            <span class="menu-soon">Soon</span>
+          <button class="menu-tile" id="tileSeafarersBtn">
             <span class="menu-icon">&#128100;</span>
             <span class="menu-label">Seafarers</span>
           </button>
@@ -98,6 +97,54 @@
             </div>
             <span class="fav-star-btn" data-tool="qcheck" title="Add to Favorites">&#9734;</span>
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Seafarers sub-menu -->
+    <div class="view hidden" id="seafarersView">
+      <div class="view-body">
+        <div class="feature-list">
+          <button class="feature-tile" id="tileSfbrBtn">
+            <span class="feature-icon">&#128279;</span>
+            <div class="feature-info">
+              <div class="feature-name">Zoho BMAR Bridge</div>
+              <div class="feature-desc">Transfer seafarer data to the Zoho BMAR form automatically</div>
+            </div>
+            <span class="fav-star-btn" data-tool="zoho-bridge" title="Add to Favorites">&#9734;</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Seafarers — Zoho BMAR Bridge tool -->
+    <div class="view hidden" id="seafarersBridgeView">
+      <div class="view-body">
+        <!-- Extension context: active bridge UI -->
+        <div id="sfbrExtContent" class="hidden">
+          <div class="sfbr-how-to">
+            <div class="sfbr-step">
+              <span class="sfbr-step-num">1</span>
+              Open the <strong>Seafarers Panel</strong> and navigate to the <strong>Review&nbsp;Extracted&nbsp;Data</strong> page
+            </div>
+            <div class="sfbr-step">
+              <span class="sfbr-step-num">2</span>
+              Click <strong>Inject&nbsp;Bridge</strong> below while that tab is active
+            </div>
+            <div class="sfbr-step">
+              <span class="sfbr-step-num">3</span>
+              Click <strong>"Enviar para Zoho&nbsp;BMAR"</strong> on the page — Zoho opens and auto-fills
+            </div>
+          </div>
+          <button class="run-btn" id="sfbrInjectBtn">Inject Bridge into Seafarers Tab</button>
+          <div id="sfbrStatus" class="sfbr-status"></div>
+        </div>
+        <!-- Non-extension context: install note -->
+        <div id="sfbrNonExtNote" class="hidden">
+          <div class="info-note">
+            <p>&#128279; This tool requires the <strong>EUROMAR Toolkit Chrome Extension</strong>.</p>
+            <p class="info-note-sub">Install the extension to inject the bridge directly into the Seafarers Panel and auto-fill the Zoho BMAR form.</p>
+          </div>
         </div>
       </div>
     </div>
@@ -303,6 +350,13 @@
             <div class="factor-title">COMPANY STATUS</div>
             <div class="factor-pill" id="vesselCompanyPill"></div>
           </div>
+        </div>
+
+        <!-- ISM Manager — shown only when the API returns this field -->
+        <div class="ism-result-card hidden" id="vesselIsmCard">
+          <div class="ism-result-label">ISM Manager</div>
+          <div class="ism-result-name" id="vesselIsmName"></div>
+          <div class="ism-result-imo" id="vesselIsmImo"></div>
         </div>
 
         <div class="share-box">

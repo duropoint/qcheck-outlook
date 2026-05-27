@@ -977,3 +977,105 @@ input[type="text"]:focus, input[type="password"]:focus {
 .fav-star-btn.fav-active {
   color: #f59e0b;
 }
+
+/* Compact override for Favorites tiles on the main page */
+.fav-tile {
+  padding: 10px 12px;
+  gap: 10px;
+}
+.fav-tile .feature-icon {
+  font-size: 18px;
+  width: 24px;
+}
+.fav-tile .feature-name {
+  font-size: 13px;
+}
+
+/* ---------- Vessel result — ISM Manager card ---------- */
+.ism-result-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+}
+.ism-result-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+.ism-result-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a2332;
+}
+.ism-result-imo {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 1px;
+}
+
+/* ---------- Seafarers Zoho Bridge ---------- */
+.sfbr-how-to {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sfbr-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  color: #1e40af;
+  line-height: 1.45;
+}
+
+.sfbr-step-num {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  background: #1e40af;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+
+.sfbr-status {
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  min-height: 18px;
+  line-height: 1.4;
+}
+.sfbr-status.ok    { color: #16a34a; }
+.sfbr-status.error { color: #dc2626; }
+.sfbr-status.info  { color: #6b7280; }
+
+.info-note {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.5;
+}
+.info-note-sub {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #6b7280;
+}
