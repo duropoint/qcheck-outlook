@@ -725,17 +725,9 @@ function renderVesselResult({ vImo, vNm, data }) {
   setPill($("vesselPscPill"),     a.psc);
   setPill($("vesselCompanyPill"), a.company);
 
-  // ISM Manager — shown only when the API returns this field
-  const ismName = data.ism_manager     || "";
-  const ismImo  = data.ism_manager_imo || "";
-  const ismCard = $("vesselIsmCard");
-  if (ismName) {
-    $("vesselIsmName").textContent = ismName;
-    $("vesselIsmImo").textContent  = ismImo ? `IMO ${ismImo}` : "";
-    ismCard.classList.remove("hidden");
-  } else {
-    ismCard.classList.add("hidden");
-  }
+  // ISM Manager — hide card initially; enrichVesselWithIsmData() will show it
+  // if the ship-search API returns this data (Q Check API doesn't include it).
+  $("vesselIsmCard").classList.add("hidden");
 
   const url = data.shareable_url || "";
   $("vesselShareUrl").textContent = url;
@@ -765,6 +757,54 @@ function renderVesselResult({ vImo, vNm, data }) {
   vesselZammadStatus.textContent = "";
 
   showView(vesselResult);
+
+  // Enrich with ISM manager data from the ships search API (non-blocking).
+  // Q Check API doesn't return ISM fields, so we fetch them separately.
+  enrichVesselWithIsmData(vImo, vNm || data.vessel_name || "");
+}
+
+/**
+ * After a vessel Q Check, silently fetch ISM manager data from the ship-search
+ * API and populate the ISM card + lastResultData so Copy as Table includes it.
+ */
+async function enrichVesselWithIsmData(vImo, vNm) {
+  const apiBase   = (Env.getSetting(SETTING_API_BASE, DEFAULT_API_BASE) || DEFAULT_API_BASE).replace(/\/$/, "");
+  const searchKey = Env.getSetting(SETTING_COMPANIES_KEY, "") || "";
+  if (!searchKey || !vNm) return;
+
+  try {
+    const resp = await fetch(`${apiBase}${SHIP_SEARCH_PATH}?name=${encodeURIComponent(vNm)}`, {
+      headers: { "X-API-Key": searchKey }
+    });
+    if (!resp.ok) return;
+
+    const json    = await resp.json();
+    const results = json.results || [];
+
+    // Match by IMO; fall back to first result if only one returned
+    const match = results.find(r => String(r.vessel_imo) === String(vImo))
+                || (results.length === 1 ? results[0] : null);
+
+    if (!match || !match.ism_manager) return;
+
+    const ismName = match.ism_manager     || "";
+    const ismImo  = match.ism_manager_imo || "";
+
+    // Update the visible card only if the vessel result is still showing
+    if (currentView === vesselResult) {
+      $("vesselIsmName").textContent = ismName;
+      $("vesselIsmImo").textContent  = ismImo ? `IMO ${ismImo}` : "";
+      $("vesselIsmCard").classList.remove("hidden");
+    }
+
+    // Always propagate to lastResultData so Copy as Table captures it
+    if (lastResultData && lastResultData.mode === "vessel") {
+      lastResultData.data.ism_manager     = ismName;
+      lastResultData.data.ism_manager_imo = ismImo;
+    }
+  } catch {
+    // ISM data is supplementary — fail silently
+  }
 }
 
 function setPill(el, value) {
