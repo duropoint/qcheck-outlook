@@ -27,7 +27,6 @@ euromar-toolkit-chrome/   Chrome Extension shell
   popup.js
   popup.html
   popup.css
-  content.js           Zammad content script — fills ticket fields on zvl_fill message
   icons/
 ```
 
@@ -122,7 +121,7 @@ Two bridge types, both initiated by the iframe via `window.parent.postMessage`:
 | `type` | Direction | Purpose |
 |---|---|---|
 | `toolkit-api` | iframe → popup → background → fetch → back | Generic API POST to the backend |
-| `zvl_fill` | iframe → popup → background → content script | Fill vessel fields in active Zammad tab |
+| `zvl_fill` | iframe → popup → background → `executeScript` | Fill vessel fields in active Zammad tab |
 
 Responses are posted back to the iframe at `TOOLKIT_ORIGIN` with a matching `requestId`.
 
@@ -134,10 +133,11 @@ Responses are posted back to the iframe at `TOOLKIT_ORIGIN` with a matching `req
 
 Only when changing `euromar-toolkit-chrome/manifest.json`:
 - New permissions
-- New host permissions (new API domain or content-script target)
 - New context menu entries
 
-UI changes, new tools, API logic changes → update hosted files on `main` only.
+`host_permissions` is set to `<all_urls>` so new tools and new domains **never** require a reinstall. DOM injection on any site is handled via `chrome.scripting.executeScript` directly from `background.js` — no `content_scripts` registration needed.
+
+UI changes, new tools, API logic changes, new domain interactions → update hosted files on `main` only.
 
 ## CORS
 
