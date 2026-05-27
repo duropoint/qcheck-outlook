@@ -35,7 +35,7 @@
            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path>
       </svg>
-      Enviar para Zoho BMAR
+      Send to Zoho BMAR
     `;
     transferBtn.addEventListener('click', handleTransfer);
     submitBtn.parentNode.insertBefore(transferBtn, submitBtn);
@@ -104,7 +104,7 @@
     try {
       const data = extractData();
       if (!data.fullName || data.fullName.trim() === '') {
-        showNotification('Erro: Nome do marítimo não encontrado', 'error');
+        showNotification('Error: Seafarer name not found', 'error');
         return;
       }
 
@@ -116,10 +116,10 @@
              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="20 6 9 17 4 12"></polyline>
         </svg>
-        Dados enviados!
+        Data sent!
       `;
       btn.classList.add('success');
-      showNotification(`Dados de ${data.fullName} enviados para Zoho`, 'success');
+      showNotification(`Data for ${data.fullName} sent to Zoho`, 'success');
 
       // ── KEY CHANGE from standalone extension ──────────────────────────────
       // Fire a CustomEvent instead of window.open so that sfbr-relay.js
@@ -143,14 +143,14 @@
                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path>
           </svg>
-          Enviar para Zoho BMAR
+          Send to Zoho BMAR
         `;
         btn.classList.remove('success');
       }, 3000);
 
     } catch (error) {
       console.error('[SFBR] Error extracting data:', error);
-      showNotification('Erro ao extrair dados: ' + error.message, 'error');
+      showNotification('Error extracting data: ' + error.message, 'error');
     }
   }
 

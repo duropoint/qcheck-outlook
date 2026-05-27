@@ -99,18 +99,18 @@
     banner.innerHTML = `
       <div class="banner-content">
         <div class="banner-info">
-          <strong>📋 Dados disponíveis:</strong> ${seafarerData.fullName}
-          <span class="banner-details">(${seafarerData.countryOfOrigin || 'País não especificado'})</span>
+          <strong>📋 Data available:</strong> ${seafarerData.fullName}
+          <span class="banner-details">(${seafarerData.countryOfOrigin || 'Country not specified'})</span>
         </div>
         <div class="banner-actions">
           <button id="fill-form-btn" class="banner-btn fill-btn">
-            ✨ Preencher Formulário
+            ✨ Fill Form
           </button>
           <button id="diagnose-btn" class="banner-btn" style="background:#17a2b8;">
-            🔍 Diagnosticar Campos
+            🔍 Diagnose Fields
           </button>
           <button id="clear-data-btn" class="banner-btn clear-btn">
-            ✕ Limpar
+            ✕ Clear
           </button>
         </div>
       </div>
@@ -125,15 +125,15 @@
   }
 
   function diagnoseFields() {
-    console.log('[Zoho Bridge] ========== DIAGNÓSTICO DE CAMPOS ==========');
+    console.log('[Zoho Bridge] ========== FIELD DIAGNOSTICS ==========');
     
     // Get all form fields
     const inputs = document.querySelectorAll('input, select, textarea');
     let fieldIndex = 0;
     
     inputs.forEach((el) => {
-      const name = el.name || '(sem nome)';
-      const id = el.id || '(sem id)';
+      const name = el.name || '(no name)';
+      const id = el.id || '(no id)';
       const type = el.type || el.tagName.toLowerCase();
       const label = getFieldLabel(el);
       
@@ -149,21 +149,21 @@
           .slice(0, 5);
         console.log(`${fieldIndex}. [SELECT] name="${name}" | label="${label}" | options: ${options.join(', ')}${el.options.length > 5 ? '...' : ''}`);
       } else {
-        const value = el.value || '(vazio)';
+        const value = el.value || '(empty)';
         const placeholder = el.placeholder || '';
         console.log(`${fieldIndex}. [${type.toUpperCase()}] name="${name}" | label="${label}" | placeholder="${placeholder}" | value="${value}"`);
       }
     });
     
     console.log('[Zoho Bridge] ==========================================');
-    console.log('[Zoho Bridge] Copia este output e envia ao Claude para corrigir o mapeamento!');
-    
-    showNotification('Diagnóstico completo - ver consola (F12)', 'info');
+    console.log('[Zoho Bridge] Copy this output and share to fix the field mapping if needed.');
+
+    showNotification('Diagnostics complete — see console (F12)', 'info');
   }
 
   function fillForm() {
     if (!seafarerData) {
-      showNotification('Sem dados para preencher', 'error');
+      showNotification('No data to fill', 'error');
       return;
     }
 
@@ -199,11 +199,11 @@
     // Update banner
     const btn = document.getElementById('fill-form-btn');
     if (btn) {
-      btn.innerHTML = `✓ ${filledCount} campos preenchidos`;
+      btn.innerHTML = `✓ ${filledCount} fields filled`;
       btn.classList.add('success');
     }
 
-    showNotification(`Formulário preenchido com ${filledCount} campos`, 'success');
+    showNotification(`Form filled with ${filledCount} fields`, 'success');
 
     if (errors.length > 0) {
       console.warn('[Zoho Bridge] Some fields could not be filled:', errors);
@@ -390,7 +390,7 @@
       banner.classList.add('fade-out');
       setTimeout(() => banner.remove(), 300);
     }
-    showNotification('Dados limpos', 'info');
+    showNotification('Data cleared', 'info');
   }
 
   function showNotification(message, type) {
