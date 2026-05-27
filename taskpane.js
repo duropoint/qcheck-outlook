@@ -62,10 +62,12 @@ const backBtn           = $("backBtn");
 const headerTitle       = $("headerTitle");
 const mainView          = $("mainView");
 const maritimeView      = $("maritimeView");
-const salesView         = $("salesView");
-const favoritesSection  = $("favoritesSection");
-const favList           = $("favList");
-const zammadSearchView  = $("zammadSearchView");
+const salesView            = $("salesView");
+const seafarersView        = $("seafarersView");
+const seafarersBridgeView  = $("seafarersBridgeView");
+const favoritesSection     = $("favoritesSection");
+const favList              = $("favList");
+const zammadSearchView     = $("zammadSearchView");
 const zammadReportsView = $("zammadReportsView");
 const zvlSearchInput    = $("zvlSearchInput");
 const zvlStatus         = $("zvlStatus");
@@ -95,6 +97,7 @@ let zvlResults         = [];
 let formViewBack        = null; // back target for formView
 let zammadSearchBack    = null; // back target for zammadSearchView
 let zammadReportsBack   = null; // back target for zammadReportsView
+let bridgeViewBack      = null; // back target for seafarersBridgeView
 
 // Favorites — array of tool IDs, persisted via SETTING_FAVORITES
 let favorites = [];
@@ -135,8 +138,37 @@ const TOOL_DEFS = {
       zammadReportsBack = origin || maritimeView;
       showView(zammadReportsView);
     }
+  },
+  "zoho-bridge": {
+    icon: "🔗",  // 🔗
+    name: "Zoho BMAR Bridge",
+    desc: "Transfer seafarer data to Zoho BMAR automatically",
+    extOnly: true,   // hidden outside the Chrome Extension
+    navigate(origin) {
+      bridgeViewBack = origin || seafarersView;
+      showSeafarersBridgeView();
+    }
   }
 };
+
+// ---------- Environment helpers ----------
+
+/** True when running inside the Chrome Extension side-panel (or the iframe it embeds). */
+function isExtensionContext() {
+  return Env.env === "extension"
+    || new URLSearchParams(location.search).get("context") === "extension";
+}
+
+/**
+ * Hide menu tiles and tool features that are marked extOnly in TOOL_DEFS
+ * when the UI is not running inside the Chrome Extension.
+ */
+function applyExtOnlyVisibility() {
+  if (isExtensionContext()) return; // nothing to hide
+  // Hide the Seafarers tile on the main menu
+  const seafarersBtn = $("tileSeafarersBtn");
+  if (seafarersBtn) seafarersBtn.classList.add("hidden");
+}
 
 // ---------- Env init ----------
 Env.ready(() => {
@@ -158,6 +190,7 @@ Env.ready(() => {
   loadFavorites();   // populate favorites[] before rendering
   bindEvents();
   initApp();
+  applyExtOnlyVisibility();
   renderFavStars();
   renderFavoritesSection();
   setupAutocomplete({ inputEl: companyImo,       pairedEl: companyName,       searchParam: "imo",  dropdownEl: $("companyImoDropdown") });
@@ -225,6 +258,7 @@ function bindEvents() {
   );
   $("tileMaritimeBtn").addEventListener("click", () => showView(maritimeView));
   $("tileSalesBtn").addEventListener("click", () => showView(salesView));
+  $("tileSeafarersBtn").addEventListener("click", () => showView(seafarersView));
 
   $("tileQCheckBtn").addEventListener("click", () => {
     formViewBack = maritimeView;
@@ -242,6 +276,14 @@ function bindEvents() {
     formViewBack = salesView;
     showView(formView);
   });
+
+  // Seafarers sub-menu
+  $("tileSfbrBtn").addEventListener("click", () => {
+    TOOL_DEFS["zoho-bridge"].navigate(seafarersView);
+  });
+
+  // Seafarers Bridge — inject button
+  $("sfbrInjectBtn").addEventListener("click", sendSfbrInject);
 
   // Star (favorites) buttons — stop propagation so tile click isn't also fired
   document.querySelectorAll(".fav-star-btn").forEach(star => {
@@ -464,7 +506,8 @@ async function testConnection() {
 
 // ---------- View switching ----------
 function showView(view) {
-  [mainView, maritimeView, salesView, zammadSearchView, zammadReportsView,
+  [mainView, maritimeView, salesView, seafarersView, seafarersBridgeView,
+   zammadSearchView, zammadReportsView,
    formView, loadingView, errorView, confirmView, companyResult, vesselResult, settingsView]
     .filter(v => v)
     .forEach(v => v.classList.add("hidden"));
@@ -491,6 +534,13 @@ function updateNavChrome(view) {
     title = "Sales";
     showSettings = !firstRun;
     backTarget = mainView;
+  } else if (id === "seafarersView") {
+    title = "Seafarers";
+    showSettings = !firstRun;
+    backTarget = mainView;
+  } else if (id === "seafarersBridgeView") {
+    title = "Zoho BMAR Bridge";
+    backTarget = bridgeViewBack || seafarersView;
   } else if (id === "formView") {
     showToggle = !firstRun;
     backTarget = formViewBack || maritimeView;
@@ -667,6 +717,19 @@ function renderVesselResult({ vImo, vNm, data }) {
   setPill($("vesselAgePill"),     a.age);
   setPill($("vesselPscPill"),     a.psc);
   setPill($("vesselCompanyPill"), a.company);
+
+  // ISM Manager — shown only when the API returns this field
+  const ismName = data.ism_manager     || "";
+  const ismImo  = data.ism_manager_imo || "";
+  const ismCard = $("vesselIsmCard");
+  if (ismName) {
+    $("vesselIsmName").textContent = ismName;
+    $("vesselIsmImo").textContent  = ismImo ? `IMO ${ismImo}` : "";
+    ismCard.classList.remove("hidden");
+  } else {
+    ismCard.classList.add("hidden");
+  }
+
   const url = data.shareable_url || "";
   $("vesselShareUrl").textContent = url;
   $("vesselCopyBtn").onclick      = () => copyToClipboard(url, $("vesselCopyBtn"));
@@ -876,8 +939,19 @@ function buildCompanyTable({ imo, name, data }) {
 }
 
 function buildVesselTable({ vImo, vNm, data }) {
-  const a   = data.assessment || {};
-  const url = data.shareable_url || "";
+  const a       = data.assessment || {};
+  const url     = data.shareable_url || "";
+  const ismName = data.ism_manager     || "";
+  const ismImo  = data.ism_manager_imo || "";
+  const ismRow  = ismName
+    ? `<tr style="${TABLE_ROW_STYLE}">
+    <td style="${TABLE_CELL_STYLE}">ISM Manager</td>
+    <td style="${TABLE_CELL_R_STYLE}">
+      <span style="font-size:13px;font-weight:600;color:#1a2332">${escHtml(ismName)}</span>
+      ${ismImo ? `<span style="font-size:11px;color:#6b7280;display:block">IMO ${escHtml(String(ismImo))}</span>` : ""}
+    </td>
+  </tr>`
+    : "";
   return `<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:14px;min-width:320px">
   <tr><td colspan="2" style="${TABLE_HEADER_STYLE}">
     <div style="font-size:16px;font-weight:700">${escHtml(vNm)}</div>
@@ -896,6 +970,7 @@ function buildVesselTable({ vImo, vNm, data }) {
     <td style="${TABLE_CELL_STYLE}">Company Status</td>
     <td style="${TABLE_CELL_R_STYLE}"><span style="${pillStyle(a.company)}">${escHtml(a.company || "Unknown")}</span></td>
   </tr>
+  ${ismRow}
   <tr><td style="padding:10px 14px;font-size:12px;color:#6b7280">Q Check Report (valid 30 days)</td>
       <td style="${TABLE_CELL_R_STYLE}">${url ? `<a href="${escHtml(url)}" style="color:#145b76;font-weight:700;font-size:13px">View Report &#8594;</a>` : ""}</td></tr>
 </table>`;
@@ -1274,14 +1349,20 @@ function renderFavoritesSection() {
   // Remove tiles generated by a previous render (keep the static label)
   favList.innerHTML = "";
 
-  const validFavs = favorites.filter(id => TOOL_DEFS[id]);
+  const isExt = isExtensionContext();
+  const validFavs = favorites.filter(id => {
+    const tool = TOOL_DEFS[id];
+    if (!tool) return false;
+    if (tool.extOnly && !isExt) return false;
+    return true;
+  });
   favoritesSection.classList.toggle("hidden", validFavs.length === 0);
 
   validFavs.forEach(toolId => {
     const tool = TOOL_DEFS[toolId];
 
     const btn = document.createElement("button");
-    btn.className = "feature-tile";
+    btn.className = "feature-tile fav-tile";
     btn.innerHTML =
       `<span class="feature-icon">${tool.icon}</span>`
     + `<div class="feature-info">`
@@ -1301,6 +1382,58 @@ function renderFavoritesSection() {
 
     favList.appendChild(btn);
   });
+}
+
+// ---------- Seafarers — Zoho BMAR Bridge ----------
+
+/** Show the bridge view and configure visible section based on environment. */
+function showSeafarersBridgeView() {
+  const isExt = isExtensionContext();
+  $("sfbrExtContent").classList.toggle("hidden", !isExt);
+  $("sfbrNonExtNote").classList.toggle("hidden",  isExt);
+  // Reset status + button on every open
+  const statusEl = $("sfbrStatus");
+  if (statusEl) { statusEl.textContent = ""; statusEl.className = "sfbr-status"; }
+  const injectBtn = $("sfbrInjectBtn");
+  if (injectBtn) injectBtn.disabled = false;
+  showView(seafarersBridgeView);
+}
+
+/** Send sfbr_inject postMessage to popup.js and wait for the response. */
+function sendSfbrInject() {
+  const requestId = `${Date.now()}-${Math.random()}`;
+  const statusEl  = $("sfbrStatus");
+  const injectBtn = $("sfbrInjectBtn");
+
+  injectBtn.disabled    = true;
+  statusEl.textContent  = "Injecting…";
+  statusEl.className    = "sfbr-status info";
+
+  let settled = false;
+  function settle(ok, msg) {
+    if (settled) return;
+    settled = true;
+    window.removeEventListener("message", handleResp);
+    injectBtn.disabled   = false;
+    statusEl.textContent = msg;
+    statusEl.className   = "sfbr-status " + (ok ? "ok" : "error");
+  }
+
+  function handleResp(event) {
+    if (!event.data || event.data.type !== "sfbr_inject_response") return;
+    if (event.data.requestId !== requestId) return;
+    if (event.data.ok) {
+      settle(true, "✓ Bridge injected — the \"Enviar para Zoho BMAR\" button should now appear on the Seafarers page.");
+    } else {
+      settle(false, event.data.error || "Injection failed.");
+    }
+  }
+
+  window.addEventListener("message", handleResp);
+  window.parent.postMessage({ type: "sfbr_inject", requestId }, "*");
+
+  // Timeout — if no response, probably not in extension context
+  setTimeout(() => settle(false, "No response. Make sure you are using the EUROMAR Chrome Extension."), 6000);
 }
 
 // ---------- Zammad Reports ----------

@@ -85,5 +85,22 @@ window.addEventListener("message", async (event) => {
       }
       break;
     }
+
+    case "sfbr_inject": {
+      const requestId = msg.requestId ?? `${Date.now()}-${Math.random()}`;
+      try {
+        const response = await chrome.runtime.sendMessage({ action: "sfbr_inject" });
+        iframe.contentWindow.postMessage(
+          { type: "sfbr_inject_response", requestId, ...response },
+          TOOLKIT_ORIGIN
+        );
+      } catch (err) {
+        iframe.contentWindow.postMessage(
+          { type: "sfbr_inject_response", requestId, ok: false, error: err.message },
+          TOOLKIT_ORIGIN
+        );
+      }
+      break;
+    }
   }
 });

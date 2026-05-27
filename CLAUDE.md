@@ -129,15 +129,22 @@ Responses are posted back to the iframe at `TOOLKIT_ORIGIN` with a matching `req
 
 `popup.js` always appends `?context=extension` to the iframe URL. `taskpane.js` reads this parameter to show the **"… into Zammad Case"** button in the Vessel Search detail view, since `Env.env` is `"browser"` inside the iframe (the `chrome` object is not available to web-origin iframes).
 
-### When to reinstall the extension
+### When to reload / reinstall the extension
 
-Only when changing `euromar-toolkit-chrome/manifest.json`:
+**Reload only** (click ↺ on `chrome://extensions`, settings preserved) — required whenever any file inside `euromar-toolkit-chrome/` changes:
+- `background.js`, `popup.js`, new injected scripts, CSS files, icons, etc.
+
+**Reinstall** (unload + reload unpacked, or publish a new version) — only when `euromar-toolkit-chrome/manifest.json` itself changes in a structural way:
 - New permissions
 - New context menu entries
+- New `content_scripts` declarations
 
-`host_permissions` is set to `<all_urls>` so new tools and new domains **never** require a reinstall. DOM injection on any site is handled via `chrome.scripting.executeScript` directly from `background.js` — no `content_scripts` registration needed.
+`host_permissions` is set to `<all_urls>` so new tools and new domains **never** require a manifest change. DOM injection on any site is handled via `chrome.scripting.executeScript` directly from `background.js` — no `content_scripts` registration needed.
 
 UI changes, new tools, API logic changes, new domain interactions → update hosted files on `main` only.
+
+> **⚠️ Always ask the user before implementing anything that requires a Chrome Extension reload or reinstall.**
+> If a feature cannot be built without modifying `euromar-toolkit-chrome/` (reload) or changing `manifest.json` (reinstall), stop and confirm with the user before writing any code.
 
 ## CORS
 
