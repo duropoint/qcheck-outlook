@@ -160,14 +160,21 @@ function isExtensionContext() {
 }
 
 /**
- * Hide menu tiles and tool features that are marked extOnly in TOOL_DEFS
- * when the UI is not running inside the Chrome Extension.
+ * Hide tool tiles that are marked extOnly in TOOL_DEFS when the UI is not
+ * running inside the Chrome Extension.
+ * The Seafarers *category* tile is always visible; only tools inside it that
+ * are extension-only get hidden, and an empty-state message is shown instead.
  */
 function applyExtOnlyVisibility() {
   if (isExtensionContext()) return; // nothing to hide
-  // Hide the Seafarers tile on the main menu
-  const seafarersBtn = $("tileSeafarersBtn");
-  if (seafarersBtn) seafarersBtn.classList.add("hidden");
+
+  // Hide extension-only tools inside the Seafarers sub-menu
+  const sfbrBtn = $("tileSfbrBtn");
+  if (sfbrBtn) sfbrBtn.classList.add("hidden");
+
+  // Show the empty-state message so the sub-menu isn't blank
+  const emptyNote = $("seafarersEmpty");
+  if (emptyNote) emptyNote.classList.remove("hidden");
 }
 
 // ---------- Env init ----------
@@ -1423,7 +1430,7 @@ function sendSfbrInject() {
     if (!event.data || event.data.type !== "sfbr_inject_response") return;
     if (event.data.requestId !== requestId) return;
     if (event.data.ok) {
-      settle(true, "✓ Bridge injected — the \"Enviar para Zoho BMAR\" button should now appear on the Seafarers page.");
+      settle(true, "✓ Bridge injected — the \"Send to Zoho BMAR\" button should now appear on the Seafarers page.");
     } else {
       settle(false, event.data.error || "Injection failed.");
     }
