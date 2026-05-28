@@ -86,6 +86,48 @@ window.addEventListener("message", async (event) => {
       break;
     }
 
+    case "chkbox_inject": {
+      const requestId = msg.requestId ?? `${Date.now()}-${Math.random()}`;
+      const SFBR_ORIGINS = [
+        "https://seafarers.eu-registry.com",
+        "https://seafarers-web-test.idego.io"
+      ];
+      try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!tab) throw new Error("No active tab found.");
+        if (tab.url) {
+          const origin = new URL(tab.url).origin;
+          if (!SFBR_ORIGINS.includes(origin)) {
+            throw new Error("Active tab is not the Seafarers Panel. Open seafarers.eu-registry.com and try again.");
+          }
+        }
+        const [{ result }] = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: () => {
+            const boxes = document.querySelectorAll(".ui-chkbox-box");
+            let count = 0;
+            for (const box of boxes) {
+              if (!box.querySelector(".ui-icon-check")) {
+                box.click();
+                count++;
+              }
+            }
+            return { ok: true, count };
+          }
+        });
+        iframe.contentWindow.postMessage(
+          { type: "chkbox_inject_response", requestId, ...(result ?? { ok: true, count: 0 }) },
+          TOOLKIT_ORIGIN
+        );
+      } catch (err) {
+        iframe.contentWindow.postMessage(
+          { type: "chkbox_inject_response", requestId, ok: false, error: err.message },
+          TOOLKIT_ORIGIN
+        );
+      }
+      break;
+    }
+
     case "sfbr_inject": {
       // Handled directly here — no background.js hop needed.
       // Extension pages (including side panels) can call chrome.scripting directly,

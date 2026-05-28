@@ -121,12 +121,39 @@
             </div>
             <span class="fav-star-btn" data-tool="zoho-bridge" title="Add to Favorites">&#9734;</span>
           </button>
+          <button class="feature-tile" id="tileChkboxBtn">
+            <span class="feature-icon">&#9745;</span>
+            <div class="feature-info">
+              <div class="feature-name">Check All Checkboxes</div>
+              <div class="feature-desc">Tick all unchecked custom checkboxes on the Seafarers Panel</div>
+            </div>
+            <span class="fav-star-btn" data-tool="check-all-checkboxes" title="Add to Favorites">&#9734;</span>
+          </button>
         </div>
         <!-- Empty state: shown in non-extension contexts when no tools are available -->
         <div id="seafarersEmpty" class="hidden">
           <div class="info-note">
             <p>&#128100; More Seafarers tools are coming soon.</p>
             <p class="info-note-sub">Tools currently available in this category require the <strong>EUROMAR Toolkit Chrome Extension</strong>.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Seafarers — Check All Checkboxes tool -->
+    <div class="view hidden" id="seafarersCheckboxView">
+      <div class="view-body">
+        <div id="chkboxExtContent" class="hidden">
+          <div class="info-note">
+            <p>Click the button below to tick all unchecked custom checkboxes on the active Seafarers Panel tab.</p>
+          </div>
+          <button class="run-btn" id="chkboxRunBtn">Check All Checkboxes</button>
+          <div id="chkboxStatus" class="sfbr-status"></div>
+        </div>
+        <div id="chkboxNonExtNote" class="hidden">
+          <div class="info-note">
+            <p>&#9745; This tool requires the <strong>EUROMAR Toolkit Chrome Extension</strong>.</p>
+            <p class="info-note-sub">Install the extension to check all checkboxes directly in the Seafarers Panel.</p>
           </div>
         </div>
       </div>
