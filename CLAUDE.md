@@ -170,9 +170,9 @@ document.documentElement.appendChild(el);
 
 After the v2.0.0 refactor: **the extension folder should not need changes for new tools**. New tool = push a JS file to `scripts/` on `main`.
 
-**Reload only** (click ↺ on `chrome://extensions`, settings preserved) — required only if a file inside `euromar-toolkit-chrome/` itself changes (shell logic, relay, popup HTML/CSS).
+**Reload only** (click ↺ on `chrome://extensions`, settings preserved) — **only when the `"version"` field in `manifest.json` is bumped**. Nothing else.
 
-**Reinstall** (zip / "Load unpacked" again) — only when `manifest.json` permissions change. This should be a rare event.
+**Reinstall** (zip / "Load unpacked" again) — required for **any other change** to files inside `euromar-toolkit-chrome/` (shell logic, relay, popup HTML/CSS, new content scripts, etc.). Also required for any `manifest.json` permissions change.
 
 > **⚠️ Always ask the user before implementing anything that requires modifying the extension folder or `manifest.json`.**
 > The whole point of the v2.0.0 shell is to make this unnecessary for new tools. If you find yourself needing to add a file to `euromar-toolkit-chrome/`, stop — there is almost certainly a way to express the feature using the 8 existing ops with a hosted script.
