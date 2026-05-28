@@ -66,6 +66,7 @@ const salesView            = $("salesView");
 const seafarersView        = $("seafarersView");
 const seafarersBridgeView  = $("seafarersBridgeView");
 const seafarersCheckboxView = $("seafarersCheckboxView");
+const seafarersZtbView     = $("seafarersZtbView");
 const favoritesSection     = $("favoritesSection");
 const favList              = $("favList");
 const zammadSearchView     = $("zammadSearchView");
@@ -112,6 +113,7 @@ let zammadSearchBack    = null; // back target for zammadSearchView
 let zammadReportsBack   = null; // back target for zammadReportsView
 let bridgeViewBack      = null; // back target for seafarersBridgeView
 let checkboxViewBack    = null; // back target for seafarersCheckboxView
+let ztbViewBack         = null; // back target for seafarersZtbView
 let companySearchBack   = null; // back target for companySearchView
 
 let csSearchTimer    = null;
@@ -193,6 +195,16 @@ const TOOL_DEFS = {
       checkboxViewBack = origin || seafarersView;
       showSeafarersCheckboxView();
     }
+  },
+  "zoho-to-bmar": {
+    icon: "⚙",
+    name: "Zoho → BMAR Auto Complete",
+    desc: "Extract seafarer data from Zoho and auto-fill the BMAR certification form",
+    extOnly: true,
+    navigate(origin) {
+      ztbViewBack = origin || seafarersView;
+      showZohoToBmarView();
+    }
   }
 };
 
@@ -219,6 +231,9 @@ function applyExtOnlyVisibility() {
 
   const chkboxBtn = $("tileChkboxBtn");
   if (chkboxBtn) chkboxBtn.classList.add("hidden");
+
+  const ztbBtn = $("tileZtbBtn");
+  if (ztbBtn) ztbBtn.classList.add("hidden");
 
   // Show the empty-state message so the sub-menu isn't blank
   const emptyNote = $("seafarersEmpty");
@@ -342,12 +357,69 @@ function bindEvents() {
   $("tileChkboxBtn").addEventListener("click", () => {
     TOOL_DEFS["check-all-checkboxes"].navigate(seafarersView);
   });
+  $("tileZtbBtn").addEventListener("click", () => {
+    TOOL_DEFS["zoho-to-bmar"].navigate(seafarersView);
+  });
 
   // Seafarers Bridge — inject button
   $("sfbrInjectBtn").addEventListener("click", sendSfbrInject);
 
   // Seafarers Check All Checkboxes — run button
   $("chkboxRunBtn").addEventListener("click", sendCheckboxInject);
+
+  // Seafarers ZTB — buttons and controls
+  $("ztbCopyBtn").addEventListener("click", ztbCopyFromZoho);
+  $("ztbFolderPicker").addEventListener("change", ztbHandleFolderSelect);
+  $("ztbAddRuleCapacity").addEventListener("change", e => {
+    $("ztbCocDropdowns").classList.toggle("hidden", !e.target.checked);
+  });
+  $("ztbStcwRule").addEventListener("change", e => {
+    const rule = e.target.value;
+    const sel  = $("ztbCapacity");
+    const hint = $("ztbCapacityHint");
+    sel.innerHTML = '<option value="">&#8212; Select Capacity &#8212;</option>';
+    if (rule && ZTB_RULE_CAPACITY_MAP[rule]) {
+      ZTB_RULE_CAPACITY_MAP[rule].forEach(cap => {
+        const opt = document.createElement("option");
+        opt.value = cap; opt.textContent = cap;
+        sel.appendChild(opt);
+      });
+      if (ZTB_RULE_CAPACITY_MAP[rule].length === 1) {
+        sel.value = ZTB_RULE_CAPACITY_MAP[rule][0];
+        if (hint) hint.textContent = "Only one option available for this rule.";
+      } else {
+        if (hint) hint.textContent = "";
+      }
+    } else {
+      if (hint) hint.textContent = "";
+    }
+  });
+  $("ztbAddTankerCapacity").addEventListener("change", e => {
+    $("ztbTankerDropdowns").classList.toggle("hidden", !e.target.checked);
+  });
+  $("ztbExecuteBtn").addEventListener("click", ztbExecute);
+
+  // Forward bmar-* progress events from the extension to the ZTB UI
+  window.addEventListener("message", e => {
+    const d = e.data;
+    if (!d || typeof d.type !== "string" || !d.type.startsWith("bmar-")) return;
+    if (d.type === "bmar-progress") {
+      ztbUpdateProgress(d.percent);
+      ztbSetStatus(d.message || "", "info");
+    } else if (d.type === "bmar-complete") {
+      ztbUpdateProgress(100);
+      ztbSetStatus("✓ Automation completed successfully.", "ok");
+      ztbUpdateStepStatus("ztbStep3", "completed");
+      const execBtn = $("ztbExecuteBtn");
+      if (execBtn) execBtn.disabled = false;
+    } else if (d.type === "bmar-error") {
+      ztbSetStatus("Error: " + (d.message || "unknown"), "error");
+      const execBtn = $("ztbExecuteBtn");
+      if (execBtn) execBtn.disabled = false;
+    } else if (d.type === "bmar-upload-complete") {
+      ztbHandleUploadComplete(d.results);
+    }
+  });
 
   // Star (favorites) buttons — stop propagation so tile click isn't also fired
   document.querySelectorAll(".fav-star-btn").forEach(star => {
@@ -580,7 +652,7 @@ async function testConnection() {
 // ---------- View switching ----------
 function showView(view) {
   [mainView, maritimeView, salesView, seafarersView, seafarersBridgeView, seafarersCheckboxView,
-   zammadSearchView, zammadReportsView, companySearchView,
+   seafarersZtbView, zammadSearchView, zammadReportsView, companySearchView,
    formView, loadingView, errorView, confirmView, companyResult, vesselResult, settingsView]
     .filter(v => v)
     .forEach(v => v.classList.add("hidden"));
@@ -617,6 +689,9 @@ function updateNavChrome(view) {
   } else if (id === "seafarersCheckboxView") {
     title = "Check All Checkboxes";
     backTarget = checkboxViewBack || seafarersView;
+  } else if (id === "seafarersZtbView") {
+    title = "Zoho → BMAR Auto Complete";
+    backTarget = ztbViewBack || seafarersView;
   } else if (id === "formView") {
     showToggle = !firstRun;
     backTarget = formViewBack || maritimeView;
@@ -1838,6 +1913,247 @@ function sendCheckboxInject() {
   window.addEventListener("message", handleResp);
   window.parent.postMessage({ type: "chkbox_inject", requestId }, "*");
   setTimeout(() => settle(false, "No response. Make sure you are using the EUROMAR Chrome Extension."), 6000);
+}
+
+// ---------- Seafarers — Zoho → BMAR Auto Complete ----------
+
+let ztbCopiedData   = null;
+let ztbSelectedDocs = null;
+
+const ZTB_RULE_CAPACITY_MAP = {
+  "II/1":  ["Officer in charge of a navigational watch"],
+  "II/2":  ["Master", "Chief Mate"],
+  "II/3":  ["Master on ships of less than 500 GT, engaged on near coastal voyages", "Chief Mate"],
+  "III/1": ["Officer in Charge of an Engineering Watch"],
+  "III/2": ["Chief Engineer Officer", "Second Engineer Officer"],
+  "III/3": ["Chief Engineer Officer", "Second Engineer Officer"],
+  "III/6": ["Electrotechnical Officer"]
+};
+
+function showZohoToBmarView() {
+  const isExt = isExtensionContext();
+  $("ztbExtContent").classList.toggle("hidden", !isExt);
+  $("ztbNonExtNote").classList.toggle("hidden",  isExt);
+  showView(seafarersZtbView);
+}
+
+async function ztbCopyFromZoho() {
+  const btn = $("ztbCopyBtn");
+  btn.disabled = true;
+  ztbSetStatus("Copying data from Zoho…", "info");
+  ztbUpdateStepStatus("ztbStep1", "active");
+  const dataSummary = $("ztbDataSummary");
+  if (dataSummary) dataSummary.classList.add("hidden");
+
+  try {
+    const resp = await callExtOp("zoho-extract", {}, 15000);
+    ztbCopiedData = resp.fields;
+    ztbShowDataSummary(resp.fields);
+    ztbSetStatus("", "");
+    ztbUpdateStepStatus("ztbStep1", "completed");
+    ztbCheckReady();
+  } catch (err) {
+    ztbSetStatus(err.message || "Failed to copy data from Zoho.", "error");
+    ztbUpdateStepStatus("ztbStep1", "");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function ztbHandleFolderSelect(e) {
+  const files = [...e.target.files];
+  const types = {
+    seamans:    f => f.name.toLowerCase().startsWith("03"),
+    pass:       f => f.name.toLowerCase().startsWith("02"),
+    coc:        f => f.name.toLowerCase().startsWith("04_coc"),
+    gmdss:      f => f.name.toLowerCase().startsWith("04_gmdss") || f.name.toLowerCase().startsWith("04_goc"),
+    tankerChem: f => f.name.toLowerCase().startsWith("04_tankerchem"),
+    tankerOil:  f => f.name.toLowerCase().startsWith("04_tankeroil"),
+    tanker:     f => f.name.toLowerCase().startsWith("04_tanker") &&
+                     !f.name.toLowerCase().startsWith("04_tankerchem") &&
+                     !f.name.toLowerCase().startsWith("04_tankeroil") &&
+                     !f.name.toLowerCase().startsWith("04_coc") &&
+                     !f.name.toLowerCase().startsWith("04_gmdss") &&
+                     !f.name.toLowerCase().startsWith("04_goc"),
+    med:        f => f.name.toLowerCase().startsWith("05"),
+    rok:        f => f.name.toLowerCase().startsWith("06"),
+    loc:        f => f.name.toLowerCase().startsWith("12")
+  };
+
+  const documents = {};
+  for (const [type, matchFn] of Object.entries(types)) {
+    const file = files.find(matchFn);
+    if (!file) continue;
+    const base64 = await new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = ev => resolve(ev.target.result.split(",")[1]);
+      reader.readAsDataURL(file);
+    });
+    documents[type] = { name: file.name, data: base64 };
+  }
+
+  ztbSelectedDocs = Object.keys(documents).length > 0 ? documents : null;
+  const statusEl  = $("ztbDocStatus");
+  if (ztbSelectedDocs) {
+    const count = Object.keys(documents).length;
+    if (statusEl) { statusEl.textContent = `✓ ${count} document(s) recognised`; statusEl.className = "sfbr-status ok"; }
+    ztbUpdateStepStatus("ztbStep2", "completed");
+  } else {
+    if (statusEl) { statusEl.textContent = "No matching documents found — check file naming convention."; statusEl.className = "sfbr-status error"; }
+    ztbUpdateStepStatus("ztbStep2", "");
+  }
+  ztbCheckReady();
+}
+
+function ztbCheckReady() {
+  const btn = $("ztbExecuteBtn");
+  if (!btn) return;
+  const ready = !!(ztbCopiedData && ztbSelectedDocs);
+  btn.disabled = !ready;
+  if (ready) ztbUpdateStepStatus("ztbStep3", "active");
+}
+
+async function ztbExecute() {
+  if (!ztbCopiedData || !ztbSelectedDocs) {
+    ztbSetStatus("Copy data and select documents first.", "error");
+    return;
+  }
+  const btn = $("ztbExecuteBtn");
+  if (btn) btn.disabled = true;
+
+  const options = {
+    medicalNationality: ($("ztbMedNationality")       || {}).value || "",
+    addRuleCapacity:    ($("ztbAddRuleCapacity")       || {}).checked || false,
+    stcwRule:           ($("ztbStcwRule")              || {}).value || "",
+    capacity:           ($("ztbCapacity")              || {}).value || "",
+    addTankerCapacity:  ($("ztbAddTankerCapacity")     || {}).checked || false,
+    cop1Rule:           ($("ztbCop1Rule")              || {}).value || "",
+    cop2Rule:           ($("ztbCop2Rule")              || {}).value || "",
+    tankerCapacity:     ($("ztbTankerCapacity")        || {}).value || ""
+  };
+
+  const progressBar = $("ztbProgressBar");
+  if (progressBar) progressBar.classList.remove("hidden");
+  ztbUpdateProgress(0);
+  ztbUpdateStepStatus("ztbStep3", "active");
+  ztbSetStatus("Starting automation…", "info");
+
+  const uploadSummary = $("ztbUploadSummary");
+  if (uploadSummary) uploadSummary.classList.add("hidden");
+  const retryBtn = $("ztbRetryBtn");
+  if (retryBtn) retryBtn.remove();
+
+  try {
+    await callExtOp("bmar-automate", { fields: ztbCopiedData, documents: ztbSelectedDocs, options });
+    // Command received — progress arrives asynchronously via window message events
+  } catch (err) {
+    ztbSetStatus(err.message || "Failed to start automation.", "error");
+    if (btn) btn.disabled = false;
+    if (progressBar) progressBar.classList.add("hidden");
+  }
+}
+
+async function ztbRetryUpload(failedDocs) {
+  const docsToRetry = {};
+  for (const doc of failedDocs) {
+    if (ztbSelectedDocs && ztbSelectedDocs[doc.type]) docsToRetry[doc.type] = ztbSelectedDocs[doc.type];
+  }
+  ztbSetStatus("Retrying failed uploads…", "info");
+  try {
+    await callExtOp("bmar-upload-retry", { documents: docsToRetry });
+  } catch (err) {
+    ztbSetStatus(err.message || "Retry failed.", "error");
+  }
+}
+
+function ztbHandleUploadComplete(results) {
+  if (!results) return;
+  const { success = [], failed = [] } = results;
+  const total = success.length + failed.length;
+
+  const execBtn = $("ztbExecuteBtn");
+  if (execBtn) execBtn.disabled = false;
+
+  if (failed.length === 0) {
+    ztbUpdateProgress(100);
+    ztbSetStatus(`✓ All ${total} document(s) uploaded successfully.`, "ok");
+    ztbUpdateStepStatus("ztbStep3", "completed");
+  } else if (success.length === 0) {
+    ztbSetStatus(`All ${total} document(s) failed to upload.`, "error");
+  } else {
+    ztbSetStatus(`Upload partial: ${success.length}/${total} succeeded, ${failed.length} failed.`, "error");
+  }
+
+  ztbShowUploadSummary(results);
+  if (failed.length > 0) ztbShowRetryButton(failed);
+}
+
+function ztbShowDataSummary(data) {
+  const el = $("ztbDataSummary");
+  if (!el) return;
+  const fields = ["First Name", "Last Name", "Birthdate", "Sex", "Passport Number", "Country of Origin", "Ship", "Medical Expiry"];
+  const certs  = [];
+  if (data["COC Number"])  certs.push("COC");
+  if (data["GOC Number"])  certs.push("GMDSS");
+  if (data["COP1 Number"]) certs.push("COP1");
+  if (data["COP2 Number"]) certs.push("COP2");
+
+  let html = '<div class="ztb-summary-title">Copied Data:</div>';
+  for (const f of fields) {
+    if (data[f]) html += `<div class="ztb-summary-item"><span class="ztb-summary-label">${escHtml(f)}:</span><span class="ztb-summary-value">${escHtml(data[f])}</span></div>`;
+  }
+  if (certs.length) html += `<div class="ztb-summary-item"><span class="ztb-summary-label">Certificates:</span><span class="ztb-summary-value">${escHtml(certs.join(", "))}</span></div>`;
+  el.innerHTML = html;
+  el.classList.remove("hidden");
+}
+
+function ztbShowUploadSummary(results) {
+  const el = $("ztbUploadSummary");
+  if (!el) return;
+  const { success = [], failed = [] } = results;
+  let html = '<div class="ztb-summary-title">Upload Summary:</div>';
+  if (success.length) {
+    html += `<div class="ztb-summary-subtitle ztb-ok">Uploaded (${success.length}):</div>`;
+    success.forEach(d => { html += `<div class="ztb-summary-item"><span class="ztb-summary-label">${escHtml(d.type)}:</span><span class="ztb-summary-value">${escHtml(d.name)}</span></div>`; });
+  }
+  if (failed.length) {
+    html += `<div class="ztb-summary-subtitle ztb-err">Failed (${failed.length}):</div>`;
+    failed.forEach(d => { html += `<div class="ztb-summary-item"><span class="ztb-summary-label">${escHtml(d.type)}:</span><span class="ztb-summary-value ztb-err">${escHtml(d.name)}</span></div>`; });
+  }
+  el.innerHTML = html;
+  el.classList.remove("hidden");
+}
+
+function ztbShowRetryButton(failedDocs) {
+  const existing = $("ztbRetryBtn");
+  if (existing) existing.remove();
+  const btn = document.createElement("button");
+  btn.id = "ztbRetryBtn";
+  btn.className = "run-btn";
+  btn.style.background = "#b45309";
+  btn.style.marginTop  = "8px";
+  btn.textContent = `Retry Failed (${failedDocs.length} doc${failedDocs.length !== 1 ? "s" : ""})`;
+  btn.addEventListener("click", () => ztbRetryUpload(failedDocs));
+  const statusEl = $("ztbStatus");
+  if (statusEl) statusEl.insertAdjacentElement("afterend", btn);
+}
+
+function ztbUpdateProgress(percent) {
+  const fill = $("ztbProgressFill");
+  if (fill) fill.style.width = percent + "%";
+}
+
+function ztbSetStatus(message, type) {
+  const el = $("ztbStatus");
+  if (!el) return;
+  el.textContent = message;
+  el.className   = "sfbr-status" + (type ? " " + type : "");
+}
+
+function ztbUpdateStepStatus(stepId, status) {
+  const el = $(stepId);
+  if (!el) return;
+  el.className = "ztb-step" + (status ? " " + status : "");
 }
 
 // ---------- Zammad Reports ----------

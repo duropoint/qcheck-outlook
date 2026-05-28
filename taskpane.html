@@ -129,6 +129,14 @@
             </div>
             <span class="fav-star-btn" data-tool="check-all-checkboxes" title="Add to Favorites">&#9734;</span>
           </button>
+          <button class="feature-tile" id="tileZtbBtn">
+            <span class="feature-icon">&#9881;</span>
+            <div class="feature-info">
+              <div class="feature-name">Zoho &#8594; BMAR Auto Complete</div>
+              <div class="feature-desc">Extract seafarer data from Zoho and auto-fill the BMAR certification form</div>
+            </div>
+            <span class="fav-star-btn" data-tool="zoho-to-bmar" title="Add to Favorites">&#9734;</span>
+          </button>
         </div>
         <!-- Empty state: shown in non-extension contexts when no tools are available -->
         <div id="seafarersEmpty" class="hidden">
@@ -187,6 +195,140 @@
           <div class="info-note">
             <p>&#128279; This tool requires the <strong>EUROMAR Toolkit Chrome Extension</strong>.</p>
             <p class="info-note-sub">Install the extension to inject the bridge directly into the Seafarers Panel and auto-fill the Zoho BMAR form.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Seafarers — Zoho → BMAR Auto Complete -->
+    <div class="view hidden" id="seafarersZtbView">
+      <div class="view-body">
+        <!-- Extension context: full automation UI -->
+        <div id="ztbExtContent" class="hidden">
+
+          <!-- Step indicators -->
+          <div class="ztb-steps">
+            <div class="ztb-step" id="ztbStep1"><span class="ztb-step-n">1</span><span>Copy</span></div>
+            <div class="ztb-step" id="ztbStep2"><span class="ztb-step-n">2</span><span>Docs</span></div>
+            <div class="ztb-step" id="ztbStep3"><span class="ztb-step-n">3</span><span>Run</span></div>
+          </div>
+
+          <!-- Step 1 -->
+          <button class="run-btn" id="ztbCopyBtn">Copy Data from Zoho</button>
+          <div id="ztbDataSummary" class="ztb-summary hidden"></div>
+
+          <!-- Step 2 -->
+          <div class="ztb-file-section">
+            <label class="ztb-file-label" for="ztbFolderPicker">Select folder with PDF documents:</label>
+            <input type="file" id="ztbFolderPicker" webkitdirectory multiple />
+            <div id="ztbDocStatus" class="sfbr-status"></div>
+          </div>
+
+          <!-- Options -->
+          <div class="ztb-options">
+            <div class="ztb-opt-group">
+              <div class="ztb-opt-title">Medical Certificate</div>
+              <label class="ztb-opt-label" for="ztbMedNationality">Issuing place (nationality):</label>
+              <input type="text" id="ztbMedNationality" placeholder="e.g. Portuguese" />
+              <p class="ztb-opt-hint">Auto-filled in the &ldquo;Issuing place&rdquo; field of the medical certificate</p>
+            </div>
+
+            <div class="ztb-opt-group">
+              <div class="ztb-opt-title">STCW Options</div>
+
+              <label class="ztb-checkbox-label">
+                <input type="checkbox" id="ztbAddRuleCapacity" />
+                Add STCW Rule &amp; Capacity for COC
+              </label>
+              <div id="ztbCocDropdowns" class="ztb-dropdown-group hidden">
+                <div class="ztb-dropdown-row">
+                  <label for="ztbStcwRule">STCW Rule:</label>
+                  <select id="ztbStcwRule">
+                    <option value="">&#8212; Select Rule &#8212;</option>
+                    <option value="II/1">II/1 - Officer in charge of navigational watch (&#8805;500 GT)</option>
+                    <option value="II/2">II/2 - Master and Chief Mate (&#8805;500 GT)</option>
+                    <option value="II/3">II/3 - Officer in charge of navigational watch (&lt;500 GT, coastal)</option>
+                    <option value="III/1">III/1 - Officer in Charge of Engineering Watch</option>
+                    <option value="III/2">III/2 - Chief &amp; 2nd Engineer (&#8805;3000 KW)</option>
+                    <option value="III/3">III/3 - Chief &amp; 2nd Engineer (750-3000 KW)</option>
+                    <option value="III/6">III/6 - Electrotechnical Officer</option>
+                  </select>
+                </div>
+                <div class="ztb-dropdown-row">
+                  <label for="ztbCapacity">Capacity:</label>
+                  <select id="ztbCapacity">
+                    <option value="">&#8212; Select Capacity &#8212;</option>
+                  </select>
+                  <p id="ztbCapacityHint" class="ztb-opt-hint"></p>
+                </div>
+              </div>
+
+              <label class="ztb-checkbox-label ztb-mt">
+                <input type="checkbox" id="ztbAddTankerCapacity" />
+                Add Rules &amp; Capacity for Tankers (COP1/COP2)
+              </label>
+              <div id="ztbTankerDropdowns" class="ztb-dropdown-group hidden">
+                <div class="ztb-dropdown-row">
+                  <label for="ztbCop1Rule">COP1 Rule:</label>
+                  <select id="ztbCop1Rule">
+                    <option value="">&#8212; Select Rule &#8212;</option>
+                    <option value="V/1-1-1">V/1-1-1 - Basic training for oil and chemical</option>
+                    <option value="V/1-1-2">V/1-1-2 - Advanced training for oil</option>
+                    <option value="V/1-1-3">V/1-1-3 - Advanced training for chemical</option>
+                    <option value="V/1-2-1">V/1-2-1 - Basic training for liquified gas</option>
+                    <option value="V/1-2-2">V/1-2-2 - Advanced training for liquified gas</option>
+                  </select>
+                </div>
+                <div class="ztb-dropdown-row">
+                  <label for="ztbCop2Rule">COP2 Rule:</label>
+                  <select id="ztbCop2Rule">
+                    <option value="">&#8212; Select Rule &#8212;</option>
+                    <option value="V/1-1-1">V/1-1-1 - Basic training for oil and chemical</option>
+                    <option value="V/1-1-2">V/1-1-2 - Advanced training for oil</option>
+                    <option value="V/1-1-3">V/1-1-3 - Advanced training for chemical</option>
+                    <option value="V/1-2-1">V/1-2-1 - Basic training for liquified gas</option>
+                    <option value="V/1-2-2">V/1-2-2 - Advanced training for liquified gas</option>
+                  </select>
+                </div>
+                <div class="ztb-dropdown-row">
+                  <label for="ztbTankerCapacity">Tanker Capacity (same for both):</label>
+                  <select id="ztbTankerCapacity">
+                    <option value="">&#8212; Select &#8212;</option>
+                    <option value="Master">Master</option>
+                    <option value="Chief Mate">Chief Mate</option>
+                    <option value="Officer in charge of a navigational watch">Officer in charge of a navigational watch</option>
+                    <option value="Chief Engineer Officer">Chief Engineer Officer</option>
+                    <option value="Second Engineer Officer">Second Engineer Officer</option>
+                    <option value="Officer in Charge of an Engineering Watch">Officer in Charge of an Engineering Watch</option>
+                    <option value="Electrotechnical Officer">Electrotechnical Officer</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="info-note ztb-mt">
+                <p><strong>Automatic rules:</strong> GMDSS Rule IV/2 is always added. Configure COC and Tanker rules above as needed.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 3 -->
+          <button class="run-btn" id="ztbExecuteBtn" disabled>Run Full Automation</button>
+
+          <!-- Progress bar -->
+          <div class="ztb-progress hidden" id="ztbProgressBar">
+            <div class="ztb-progress-fill" id="ztbProgressFill"></div>
+          </div>
+
+          <!-- Status + upload summary -->
+          <div id="ztbStatus" class="sfbr-status"></div>
+          <div id="ztbUploadSummary" class="ztb-summary hidden"></div>
+
+        </div>
+        <!-- Non-extension context: install note -->
+        <div id="ztbNonExtNote" class="hidden">
+          <div class="info-note">
+            <p>&#9881; This tool requires the <strong>EUROMAR Toolkit Chrome Extension</strong>.</p>
+            <p class="info-note-sub">Install the extension to extract seafarer data from Zoho and auto-fill the BMAR certification form automatically.</p>
           </div>
         </div>
       </div>
