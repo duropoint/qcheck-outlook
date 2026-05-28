@@ -1881,38 +1881,24 @@ function showSeafarersCheckboxView() {
   showView(seafarersCheckboxView);
 }
 
-function sendCheckboxInject() {
-  const requestId = `${Date.now()}-${Math.random()}`;
-  const statusEl  = $("chkboxStatus");
-  const runBtn    = $("chkboxRunBtn");
+async function sendCheckboxInject() {
+  const statusEl = $("chkboxStatus");
+  const runBtn   = $("chkboxRunBtn");
 
   runBtn.disabled      = true;
   statusEl.textContent = "Running…";
   statusEl.className   = "sfbr-status info";
 
-  let settled = false;
-  function settle(ok, msg) {
-    if (settled) return;
-    settled = true;
-    window.removeEventListener("message", handleResp);
-    runBtn.disabled      = false;
-    statusEl.textContent = msg;
-    statusEl.className   = "sfbr-status " + (ok ? "ok" : "error");
+  try {
+    await callExtOp("exec-on-tab", { tabId: "active", scriptUrl: "chkbox.js", world: "MAIN" });
+    statusEl.textContent = "✓ Checkboxes checked.";
+    statusEl.className   = "sfbr-status ok";
+  } catch (err) {
+    statusEl.textContent = err.message || "Injection failed.";
+    statusEl.className   = "sfbr-status error";
+  } finally {
+    runBtn.disabled = false;
   }
-
-  function handleResp(event) {
-    if (!event.data || event.data.type !== "chkbox_inject_response") return;
-    if (event.data.requestId !== requestId) return;
-    if (event.data.ok) {
-      settle(true, `✓ ${event.data.count ?? 0} checkbox(es) checked.`);
-    } else {
-      settle(false, event.data.error || "Injection failed.");
-    }
-  }
-
-  window.addEventListener("message", handleResp);
-  window.parent.postMessage({ type: "chkbox_inject", requestId }, "*");
-  setTimeout(() => settle(false, "No response. Make sure you are using the EUROMAR Chrome Extension."), 6000);
 }
 
 // ---------- Seafarers — Zoho → BMAR Auto Complete ----------
