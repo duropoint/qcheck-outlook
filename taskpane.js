@@ -67,6 +67,7 @@ const seafarersView        = $("seafarersView");
 const seafarersBridgeView  = $("seafarersBridgeView");
 const seafarersCheckboxView = $("seafarersCheckboxView");
 const seafarersZtbView     = $("seafarersZtbView");
+const seafarersSraView     = $("seafarersSraView");
 const favoritesSection     = $("favoritesSection");
 const favList              = $("favList");
 const zammadSearchView     = $("zammadSearchView");
@@ -114,6 +115,7 @@ let zammadReportsBack   = null; // back target for zammadReportsView
 let bridgeViewBack      = null; // back target for seafarersBridgeView
 let checkboxViewBack    = null; // back target for seafarersCheckboxView
 let ztbViewBack         = null; // back target for seafarersZtbView
+let sraViewBack         = null; // back target for seafarersSraView
 let companySearchBack   = null; // back target for companySearchView
 
 let csSearchTimer    = null;
@@ -205,6 +207,16 @@ const TOOL_DEFS = {
       ztbViewBack = origin || seafarersView;
       showZohoToBmarView();
     }
+  },
+  "sra-fill": {
+    icon: "📋",
+    name: "SRA Auto-Fill",
+    desc: "Extract data from SRA PDFs and auto-fill the Zoho registration form",
+    extOnly: true,
+    navigate(origin) {
+      sraViewBack = origin || seafarersView;
+      showSraView();
+    }
   }
 };
 
@@ -234,6 +246,9 @@ function applyExtOnlyVisibility() {
 
   const ztbBtn = $("tileZtbBtn");
   if (ztbBtn) ztbBtn.classList.add("hidden");
+
+  const sraBtn = $("tileSraBtn");
+  if (sraBtn) sraBtn.classList.add("hidden");
 
   // Show the empty-state message so the sub-menu isn't blank
   const emptyNote = $("seafarersEmpty");
@@ -360,12 +375,33 @@ function bindEvents() {
   $("tileZtbBtn").addEventListener("click", () => {
     TOOL_DEFS["zoho-to-bmar"].navigate(seafarersView);
   });
+  $("tileSraBtn").addEventListener("click", () => {
+    TOOL_DEFS["sra-fill"].navigate(seafarersView);
+  });
 
   // Seafarers Bridge — inject button
   $("sfbrInjectBtn").addEventListener("click", sendSfbrInject);
 
   // Seafarers Check All Checkboxes — run button
   $("chkboxRunBtn").addEventListener("click", sendCheckboxInject);
+
+  // Seafarers SRA — drop zone, file input, extract/fill, SharePoint
+  const sraDropZone  = $("sraDropZone");
+  const sraFileInput = $("sraFileInput");
+  sraDropZone.addEventListener("click", () => sraFileInput.click());
+  sraDropZone.addEventListener("dragover",  e => { e.preventDefault(); sraDropZone.classList.add("drag-over"); });
+  sraDropZone.addEventListener("dragleave", () => sraDropZone.classList.remove("drag-over"));
+  sraDropZone.addEventListener("drop", e => {
+    e.preventDefault();
+    sraDropZone.classList.remove("drag-over");
+    sraAddFiles([...e.dataTransfer.files].filter(f => f.type === "application/pdf"));
+  });
+  sraFileInput.addEventListener("change", e => {
+    sraAddFiles([...e.target.files]);
+    e.target.value = "";
+  });
+  $("sraExtractBtn").addEventListener("click", sraExtractAndFill);
+  $("sraSharePointBtn").addEventListener("click", sraOpenSharePoint);
 
   // Seafarers ZTB — buttons and controls
   $("ztbCopyBtn").addEventListener("click", ztbCopyFromZoho);
@@ -652,7 +688,7 @@ async function testConnection() {
 // ---------- View switching ----------
 function showView(view) {
   [mainView, maritimeView, salesView, seafarersView, seafarersBridgeView, seafarersCheckboxView,
-   seafarersZtbView, zammadSearchView, zammadReportsView, companySearchView,
+   seafarersZtbView, seafarersSraView, zammadSearchView, zammadReportsView, companySearchView,
    formView, loadingView, errorView, confirmView, companyResult, vesselResult, settingsView]
     .filter(v => v)
     .forEach(v => v.classList.add("hidden"));
@@ -692,6 +728,9 @@ function updateNavChrome(view) {
   } else if (id === "seafarersZtbView") {
     title = "Zoho → BMAR Auto Complete";
     backTarget = ztbViewBack || seafarersView;
+  } else if (id === "seafarersSraView") {
+    title = "SRA Auto-Fill";
+    backTarget = sraViewBack || seafarersView;
   } else if (id === "formView") {
     showToggle = !firstRun;
     backTarget = formViewBack || maritimeView;
@@ -2226,5 +2265,221 @@ async function generateReport() {
     setRptStatus("Network error: " + (err.message || "unknown"), "err");
   } finally {
     rptGenerateBtn.disabled = false;
+  }
+}
+
+// ---------- Seafarers — SRA Auto-Fill ----------
+
+let sraPdfFiles     = [];
+let sraExtractedData = null;
+
+function showSraView() {
+  const isExt = isExtensionContext();
+  $("sraExtContent").classList.toggle("hidden", !isExt);
+  $("sraNonExtNote").classList.toggle("hidden",  isExt);
+  sraPdfFiles      = [];
+  sraExtractedData = null;
+  const filesList = $("sraFilesList");
+  if (filesList) { filesList.classList.add("hidden"); filesList.innerHTML = ""; }
+  const extData = $("sraExtractedData");
+  if (extData) { extData.classList.add("hidden"); extData.innerHTML = ""; }
+  sraSetStatus("", "");
+  const btn = $("sraExtractBtn");
+  if (btn) btn.disabled = true;
+  $("sraSharePointSection").classList.add("hidden");
+  showView(seafarersSraView);
+}
+
+function sraAddFiles(files) {
+  const slots = 4 - sraPdfFiles.length;
+  sraPdfFiles.push(...files.slice(0, slots));
+  sraRenderFilesList();
+  const btn = $("sraExtractBtn");
+  if (btn) btn.disabled = sraPdfFiles.length === 0;
+  if (sraPdfFiles.length >= 4) sraSetStatus("Maximum of 4 files reached.", "info");
+}
+
+function sraRenderFilesList() {
+  const el = $("sraFilesList");
+  if (!el) return;
+  if (sraPdfFiles.length === 0) { el.classList.add("hidden"); return; }
+  el.classList.remove("hidden");
+  el.innerHTML = sraPdfFiles.map((f, i) =>
+    `<div class="sra-file-item">` +
+      `<span class="sra-file-name">${escHtml(f.name)}</span>` +
+      `<button class="sra-file-remove" onclick="sraRemoveFile(${i})" title="Remove">&#10005;</button>` +
+    `</div>`
+  ).join("");
+}
+
+function sraRemoveFile(idx) {
+  sraPdfFiles.splice(idx, 1);
+  sraRenderFilesList();
+  const btn = $("sraExtractBtn");
+  if (btn) btn.disabled = sraPdfFiles.length === 0;
+  if (sraPdfFiles.length === 0) {
+    const extData = $("sraExtractedData");
+    if (extData) extData.classList.add("hidden");
+  }
+}
+window.sraRemoveFile = sraRemoveFile;
+
+function sraShowExtractedData(data) {
+  const el = $("sraExtractedData");
+  if (!el) return;
+  let html = "";
+  (data.sraNumbers || []).forEach((n, i) => {
+    html += `<div class="ztb-summary-item"><span class="ztb-summary-label">SRA ${i + 1}:</span><span class="ztb-summary-value">${escHtml(n)}</span></div>`;
+  });
+  if (data.issuingDate) html += `<div class="ztb-summary-item"><span class="ztb-summary-label">Issuing date:</span><span class="ztb-summary-value">${escHtml(data.issuingDate)}</span></div>`;
+  if (data.validUntil)  html += `<div class="ztb-summary-item"><span class="ztb-summary-label">Valid until:</span><span class="ztb-summary-value">${escHtml(data.validUntil)}</span></div>`;
+  if (data.personName)  html += `<div class="ztb-summary-item"><span class="ztb-summary-label">Name:</span><span class="ztb-summary-value">${escHtml(data.personName)}</span></div>`;
+  if (data.country)     html += `<div class="ztb-summary-item"><span class="ztb-summary-label">Country:</span><span class="ztb-summary-value">${escHtml(data.country)}</span></div>`;
+  el.innerHTML = html;
+  el.classList.toggle("hidden", !html);
+}
+
+function sraSetStatus(msg, type) {
+  const el = $("sraStatus");
+  if (!el) return;
+  el.textContent = msg;
+  el.className   = "sfbr-status" + (type ? " " + type : "");
+}
+
+async function sraEnsurePdfJs() {
+  if (window.pdfjsLib) return window.pdfjsLib;
+  await new Promise((resolve, reject) => {
+    const s    = document.createElement("script");
+    s.src      = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+    s.crossOrigin = "anonymous";
+    s.onload   = resolve;
+    s.onerror  = () => reject(new Error("Failed to load PDF.js — check your connection."));
+    document.head.appendChild(s);
+  });
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  return window.pdfjsLib;
+}
+
+async function sraExtractPdfData(file, pdfjsLib) {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf         = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+  let fullText = "";
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page    = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    fullText += content.items.map(item => item.str).join(" ") + " ";
+  }
+
+  const sraMatch = fullText.match(/PT\d{4}OSRA\d{9}/);
+
+  const nameMatch = fullText.match(
+    /a\s+to\s+([A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖØÙÚÛÜÝ][a-zàáâãäåæçèéêëìíîïðñòóôõöøùúûüýÿąćęłńóśźż]+(?:\s+[A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖØÙÚÛÜÝ][a-zàáâãäåæçèéêëìíîïðñòóôõöøùúûüýÿąćęłńóśźż]+)*?)\s+Nacionalidade/i
+  );
+
+  const countryMatch = fullText.match(/Government of\s+([A-Z][a-zà-ÿ]+(?:\s+[A-Z][a-zà-ÿ]+)*)/i);
+
+  const allDates = fullText.match(/\d{4}\/\d{2}\/\d{2}/g) || [];
+
+  return {
+    sraNumber:  sraMatch     ? sraMatch[0]            : null,
+    personName: nameMatch    ? nameMatch[1].trim()    : null,
+    country:    countryMatch ? countryMatch[1].trim() : null,
+    issuingDate: allDates[0] ? allDates[0].replace(/\//g, "-") : null,
+    validUntil:  allDates[1] ? allDates[1].replace(/\//g, "-") : null
+  };
+}
+
+async function sraExtractAndFill() {
+  if (sraPdfFiles.length === 0) {
+    sraSetStatus("Upload at least one PDF first.", "error");
+    return;
+  }
+
+  const extractBtn = $("sraExtractBtn");
+  if (extractBtn) extractBtn.disabled = true;
+  sraSetStatus("Loading PDF reader…", "info");
+
+  try {
+    const pdfjsLib = await sraEnsurePdfJs();
+    sraSetStatus("Parsing PDFs…", "info");
+
+    const results = [];
+    for (const file of sraPdfFiles) {
+      results.push(await sraExtractPdfData(file, pdfjsLib));
+    }
+
+    sraExtractedData = {
+      sraNumbers:  results.map(r => r.sraNumber).filter(Boolean),
+      issuingDate: results[0]?.issuingDate || "",
+      validUntil:  results[0]?.validUntil  || "",
+      personName:  results[0]?.personName  || "",
+      country:     results[0]?.country     || ""
+    };
+
+    sraShowExtractedData(sraExtractedData);
+
+    // Verify the active tab is a Zoho form
+    sraSetStatus("Checking active tab…", "info");
+    const tabInfo = await callExtOp("get-tab-info", { tabId: "active" });
+
+    if (!tabInfo.url ||
+        (!tabInfo.url.includes("forms.zoho.com") &&
+         !tabInfo.url.includes("forms.zohopublic.eu"))) {
+      sraSetStatus(
+        "Active tab is not a Zoho form. Switch to the Zoho SRA form tab first, then click again.",
+        "error"
+      );
+      return;
+    }
+
+    // Encode SRA data as URL hash, open fresh form tab, inject fill script
+    const dataHash = "sraData=" + btoa(JSON.stringify(sraExtractedData));
+    const fillUrl  = tabInfo.url.split("#")[0] + "#" + dataHash;
+
+    sraSetStatus("Opening form tab and filling…", "info");
+    await callExtOp("open-tab", {
+      url:   fillUrl,
+      delay: 1000,
+      ops:   [{ type: "exec-on-tab", payload: { scriptUrl: "sra-zoho.js", world: "MAIN" } }]
+    }, 60000);
+
+    sraSetStatus("✓ SRA data filled in the new form tab.", "ok");
+    $("sraSharePointSection").classList.remove("hidden");
+
+  } catch (err) {
+    sraSetStatus(err.message || "Failed.", "error");
+  } finally {
+    if (extractBtn) extractBtn.disabled = false;
+  }
+}
+
+async function sraOpenSharePoint() {
+  const personName = sraExtractedData && sraExtractedData.personName;
+  const shipName   = (($("sraSpShipName") || {}).value || "").trim();
+  const suffix     = (($("sraSpSuffix")   || {}).value || "").trim();
+  const statusEl   = $("sraSharePointStatus");
+
+  if (!personName) {
+    if (statusEl) { statusEl.textContent = "Person name not found in the PDFs."; statusEl.className = "sfbr-status error"; }
+    return;
+  }
+  if (!suffix) {
+    if (statusEl) { statusEl.textContent = "Enter a folder suffix first."; statusEl.className = "sfbr-status error"; }
+    return;
+  }
+
+  const folderName = `${personName}_${suffix}`;
+  const shipSegment = shipName ? shipName + "/" : "";
+  const folderPath  = `/sites/EUROMAR-Seafarers/Shared Documents/Seafarers Documents/${shipSegment}${folderName}`;
+  const spUrl       = `https://euregistry2.sharepoint.com/sites/EUROMAR-Seafarers/Shared%20Documents/Forms/AllItems.aspx?id=${encodeURIComponent(folderPath)}&view=0`;
+
+  try {
+    if (statusEl) { statusEl.textContent = "Opening SharePoint…"; statusEl.className = "sfbr-status info"; }
+    await callExtOp("open-tab", { url: spUrl });
+    if (statusEl) { statusEl.textContent = "✓ SharePoint folder opened."; statusEl.className = "sfbr-status ok"; }
+  } catch (err) {
+    if (statusEl) { statusEl.textContent = err.message || "Failed to open SharePoint."; statusEl.className = "sfbr-status error"; }
   }
 }
