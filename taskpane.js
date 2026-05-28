@@ -1313,15 +1313,21 @@ function onZvlInput() {
   zvlSearchTimer = setTimeout(() => doVesselSearch(q), 300);
 }
 
-async function doVesselSearch(name) {
+async function doVesselSearch(q) {
   const apiBase    = (Env.getSetting(SETTING_API_BASE, DEFAULT_API_BASE) || DEFAULT_API_BASE).replace(/\/$/, "");
   const searchKey  = Env.getSetting(SETTING_COMPANIES_KEY, "") || "";
   if (!searchKey) {
     zvlStatus.textContent = "Companies Search key not configured — open Settings.";
     return;
   }
+  const params = new URLSearchParams();
+  if (/^\d+$/.test(q)) {
+    params.set("imo", q);
+  } else {
+    params.set("name", q);
+  }
   try {
-    const resp = await fetch(`${apiBase}${SHIP_SEARCH_PATH}?name=${encodeURIComponent(name)}`, {
+    const resp = await fetch(`${apiBase}${SHIP_SEARCH_PATH}?${params}`, {
       headers: { "X-API-Key": searchKey }
     });
     if (resp.status === 401) { zvlStatus.textContent = "API key rejected (401)."; return; }
