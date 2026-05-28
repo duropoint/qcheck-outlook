@@ -189,7 +189,7 @@ const TOOL_DEFS = {
   "check-all-checkboxes": {
     icon: "☑",
     name: "Check All Checkboxes",
-    desc: "Tick all unchecked custom checkboxes on the Seafarers Panel",
+    desc: "Tick all unchecked custom checkboxes on the BMAR form",
     extOnly: true,
     navigate(origin) {
       checkboxViewBack = origin || seafarersView;
