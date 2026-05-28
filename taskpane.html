@@ -137,6 +137,14 @@
             </div>
             <span class="fav-star-btn" data-tool="zoho-to-bmar" title="Add to Favorites">&#9734;</span>
           </button>
+          <button class="feature-tile" id="tileSraBtn">
+            <span class="feature-icon">&#128203;</span>
+            <div class="feature-info">
+              <div class="feature-name">SRA Auto-Fill</div>
+              <div class="feature-desc">Extract data from SRA PDFs and auto-fill the Zoho registration form</div>
+            </div>
+            <span class="fav-star-btn" data-tool="sra-fill" title="Add to Favorites">&#9734;</span>
+          </button>
         </div>
         <!-- Empty state: shown in non-extension contexts when no tools are available -->
         <div id="seafarersEmpty" class="hidden">
@@ -329,6 +337,56 @@
           <div class="info-note">
             <p>&#9881; This tool requires the <strong>EUROMAR Toolkit Chrome Extension</strong>.</p>
             <p class="info-note-sub">Install the extension to extract seafarer data from Zoho and auto-fill the BMAR certification form automatically.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Seafarers — SRA Auto-Fill -->
+    <div class="view hidden" id="seafarersSraView">
+      <div class="view-body">
+        <!-- Extension context -->
+        <div id="sraExtContent" class="hidden">
+          <div class="sfbr-how-to">
+            <div class="sfbr-step">
+              <span class="sfbr-step-num">1</span>
+              Open the <strong>Zoho SRA registration form</strong> and keep it as the <strong>active browser tab</strong>
+            </div>
+            <div class="sfbr-step">
+              <span class="sfbr-step-num">2</span>
+              Drop up to 4 SRA PDF documents in the area below
+            </div>
+            <div class="sfbr-step">
+              <span class="sfbr-step-num">3</span>
+              Click <strong>Extract &amp; Fill Form</strong> — a new filled form tab will open
+            </div>
+          </div>
+
+          <div class="sra-drop-zone" id="sraDropZone">
+            <div class="sra-drop-icon">&#128196;</div>
+            <div class="sra-drop-text">Drop SRA PDFs here<br><small>or click to browse &middot; max 4 files</small></div>
+            <input type="file" id="sraFileInput" accept=".pdf" multiple hidden>
+          </div>
+
+          <div id="sraFilesList" class="sra-files-list hidden"></div>
+          <div id="sraExtractedData" class="sra-extracted-data hidden"></div>
+          <div id="sraStatus" class="sfbr-status"></div>
+
+          <button class="run-btn" id="sraExtractBtn" disabled>Extract &amp; Fill Form</button>
+
+          <div id="sraSharePointSection" class="sra-sp-section hidden">
+            <div class="sra-sp-title">Open SharePoint Folder</div>
+            <input type="text" id="sraSpShipName" placeholder="Ship name" class="sra-sp-input">
+            <input type="text" id="sraSpSuffix" placeholder="Folder suffix (e.g. NWO, EU)" class="sra-sp-input">
+            <button class="run-btn" id="sraSharePointBtn">Open SharePoint Folder</button>
+            <div id="sraSharePointStatus" class="sfbr-status"></div>
+          </div>
+        </div>
+        <!-- Non-extension context: install note -->
+        <div id="sraNonExtNote" class="hidden">
+          <div class="info-note">
+            <p>&#128203; This tool requires the <strong>EUROMAR Toolkit Chrome Extension</strong>.</p>
+            <p class="info-note-sub">Install the extension to extract SRA data from PDFs and auto-fill the Zoho registration form.</p>
           </div>
         </div>
       </div>

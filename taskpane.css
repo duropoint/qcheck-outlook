@@ -1364,3 +1364,99 @@ input[type="text"]:focus, input[type="password"]:focus {
 
 .ztb-ok  { color: #16a34a; }
 .ztb-err { color: #dc2626; }
+
+/* ── SRA Auto-Fill ──────────────────────────────────────────────────────── */
+
+.sra-drop-zone {
+  border: 2px dashed #93c5fd;
+  border-radius: 8px;
+  padding: 22px 16px;
+  text-align: center;
+  cursor: pointer;
+  background: #f0f9ff;
+  margin: 12px 0;
+  transition: background .15s, border-color .15s;
+}
+.sra-drop-zone:hover,
+.sra-drop-zone.drag-over {
+  border-color: #3b82f6;
+  background: #dbeafe;
+}
+.sra-drop-icon {
+  font-size: 30px;
+  margin-bottom: 6px;
+}
+.sra-drop-text {
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.5;
+}
+.sra-drop-text small {
+  color: #6b7280;
+  font-size: 11px;
+}
+.sra-files-list {
+  margin: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.sra-file-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f1f5f9;
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 12px;
+  color: #374151;
+}
+.sra-file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 8px;
+}
+.sra-file-remove {
+  background: none;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  font-size: 15px;
+  padding: 0 2px;
+  line-height: 1;
+}
+.sra-extracted-data {
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  border-radius: 8px;
+  padding: 11px 12px;
+  margin: 10px 0;
+}
+.sra-sp-section {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #e2e8f0;
+}
+.sra-sp-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #145b76;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 8px;
+}
+.sra-sp-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  margin-bottom: 7px;
+  box-sizing: border-box;
+}
+.sra-sp-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
