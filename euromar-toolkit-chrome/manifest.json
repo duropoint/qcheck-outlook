@@ -1,13 +1,16 @@
 {
   "manifest_version": 3,
   "name": "EUROMAR Toolkit",
-  "version": "1.0.5",
+  "version": "2.0.0",
   "description": "Collection of internal EUROMAR tools — loads UI from the EUROMAR Toolkit hosted backend.",
   "permissions": [
     "contextMenus",
     "storage",
     "sidePanel",
-    "scripting"
+    "scripting",
+    "tabs",
+    "notifications",
+    "downloads"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -30,5 +33,11 @@
     "16": "icons/icon-16.png",
     "48": "icons/icon-48.png",
     "128": "icons/icon-128.png"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/icon-128.png"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }

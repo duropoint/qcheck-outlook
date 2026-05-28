@@ -1,37 +1,27 @@
-// sfbr-seafarers.js — injected in MAIN world on the Seafarers Panel tab.
+// sfbr-seafarers.js — HOSTED. Loaded by the extension shell into the
+// Seafarers Panel page (MAIN world). Adds a "Send to Zoho BMAR" button,
+// extracts seafarer data, and uses the generic EUROMAR relay to ask the
+// shell to open the Zoho form and auto-fill it.
 //
-// Adds a "Send to Zoho BMAR" button next to the form's submit button.
-// When clicked, serialises the visible seafarer fields and signals the
-// extension (via a DOM attribute that sfbr-relay.js watches) to open the
-// Zoho form in a new tab and auto-fill it.
-//
-// Uses DOM-attribute signalling instead of CustomEvent.detail because
-// Chrome does not reliably forward CustomEvent detail across the
-// MAIN ↔ ISOLATED world boundary in all versions.
+// Push to main → live in ~90 s, no extension reload.
 
 (function () {
   'use strict';
-
-  // Guard — prevent double-injection
   if (window.__sfbrInjected) return;
   window.__sfbrInjected = true;
 
-  // ── Button injection ────────────────────────────────────────────────────────
+  // ── Button injection ──────────────────────────────────────────────────────
 
   function init() {
-    // Try to add the button whenever there is a submit button on the page.
-    // addTransferButton() already guards against duplicates.
     addTransferButton();
   }
 
   function addTransferButton() {
-    if (document.getElementById('zoho-transfer-btn')) return; // already present
+    if (document.getElementById('zoho-transfer-btn')) return;
 
-    // Find submit button or any prominent action button
     const submitBtn = document.querySelector('button[type="submit"]')
       || Array.from(document.querySelectorAll('button'))
            .find(b => /confirm|submit|save/i.test((b.textContent || '').trim()));
-
     if (!submitBtn) return;
 
     const transferBtn = document.createElement('button');
@@ -49,7 +39,7 @@
     submitBtn.parentNode.insertBefore(transferBtn, submitBtn);
   }
 
-  // ── Data extraction ─────────────────────────────────────────────────────────
+  // ── Data extraction ───────────────────────────────────────────────────────
 
   function extractData() {
     const getValue = (id) => { const el = document.getElementById(id); return el ? (el.value || '') : ''; };
@@ -109,7 +99,18 @@
     };
   }
 
-  // ── Transfer handler ────────────────────────────────────────────────────────
+  // ── Generic relay signal ──────────────────────────────────────────────────
+
+  function emitRelay(action, payload) {
+    const el = document.createElement('span');
+    el.className = '__euromar_relay__';
+    el.setAttribute('data-euromar-action', action);
+    el.setAttribute('data-euromar-payload', JSON.stringify(payload));
+    el.style.display = 'none';
+    document.documentElement.appendChild(el);
+  }
+
+  // ── Transfer handler ──────────────────────────────────────────────────────
 
   function handleTransfer() {
     const btn = document.getElementById('zoho-transfer-btn');
@@ -133,16 +134,17 @@
       btn.classList.add('success');
       showNotification(`Data for ${data.fullName} sent to Zoho`, 'success');
 
-      // Signal sfbr-relay.js (ISOLATED world) via a DOM attribute on a temporary
-      // element. Using DOM attributes is reliable across MAIN ↔ ISOLATED worlds,
-      // unlike CustomEvent.detail which Chrome can silently strip.
+      // Ask the shell to open the Zoho tab and auto-inject the fill script + styles.
+      // background.js will: create tab → wait for complete → run ops sequentially.
       setTimeout(() => {
-        const signal = document.createElement('span');
-        signal.id = '__sfbr_zoho_signal__';
-        signal.setAttribute('data-zoho-url', zohoUrl);
-        signal.style.display = 'none';
-        document.documentElement.appendChild(signal);
-        // sfbr-relay.js removes the element after reading it
+        emitRelay('open-tab', {
+          url:   zohoUrl,
+          delay: 1200,
+          ops: [
+            { type: 'css-on-tab',  payload: { cssUrl:    'sfbr-styles.css'   } },
+            { type: 'exec-on-tab', payload: { scriptUrl: 'sfbr-zoho.js', world: 'MAIN' } }
+          ]
+        });
       }, 400);
 
       // Auto-submit the seafarers form after transfer
@@ -170,8 +172,6 @@
     }
   }
 
-  // ── Notification ────────────────────────────────────────────────────────────
-
   function showNotification(message, type) {
     const existing = document.querySelector('.seafarer-notification');
     if (existing) existing.remove();
@@ -182,12 +182,11 @@
     setTimeout(() => { n.classList.add('fade-out'); setTimeout(() => n.remove(), 300); }, 4000);
   }
 
-  // ── Boot ────────────────────────────────────────────────────────────────────
+  // ── Boot ──────────────────────────────────────────────────────────────────
 
   init();
-  setTimeout(init, 800);   // second pass for slow-rendering SPAs
+  setTimeout(init, 800);
 
-  // Re-init on SPA navigation so the button survives page transitions
   const _origPush    = history.pushState.bind(history);
   const _origReplace = history.replaceState.bind(history);
   history.pushState    = function (...a) { _origPush(...a);    setTimeout(init, 600); };
