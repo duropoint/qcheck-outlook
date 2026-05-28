@@ -46,6 +46,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       });
     return true;
   }
+  // Forward bmar-* progress events from the BMAR content script to the side panel.
+  // sender.tab is set when the message originates from a content script.
+  if (msg._fromContent && msg.type && msg.type.startsWith("bmar-") && sender?.tab) {
+    chrome.runtime.sendMessage({ ...msg, _fromContent: false, _relayed: true }).catch(() => {});
+    sendResponse({ ok: true });
+    return true;
+  }
 });
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
