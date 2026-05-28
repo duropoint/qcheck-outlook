@@ -1946,49 +1946,64 @@ async function ztbCopyFromZoho() {
   }
 }
 
-async function ztbHandleFolderSelect(e) {
-  const files = [...e.target.files];
-  const types = {
-    seamans:    f => f.name.toLowerCase().startsWith("03"),
-    pass:       f => f.name.toLowerCase().startsWith("02"),
-    coc:        f => f.name.toLowerCase().startsWith("04_coc"),
-    gmdss:      f => f.name.toLowerCase().startsWith("04_gmdss") || f.name.toLowerCase().startsWith("04_goc"),
-    tankerChem: f => f.name.toLowerCase().startsWith("04_tankerchem"),
-    tankerOil:  f => f.name.toLowerCase().startsWith("04_tankeroil"),
-    tanker:     f => f.name.toLowerCase().startsWith("04_tanker") &&
-                     !f.name.toLowerCase().startsWith("04_tankerchem") &&
-                     !f.name.toLowerCase().startsWith("04_tankeroil") &&
-                     !f.name.toLowerCase().startsWith("04_coc") &&
-                     !f.name.toLowerCase().startsWith("04_gmdss") &&
-                     !f.name.toLowerCase().startsWith("04_goc"),
-    med:        f => f.name.toLowerCase().startsWith("05"),
-    rok:        f => f.name.toLowerCase().startsWith("06"),
-    loc:        f => f.name.toLowerCase().startsWith("12")
-  };
+function ztbHandleFolderSelect(e) {
+  try {
+    const files = [...e.target.files];
+    const types = {
+      seamans:    f => f.name.toLowerCase().startsWith("03"),
+      pass:       f => f.name.toLowerCase().startsWith("02"),
+      coc:        f => f.name.toLowerCase().startsWith("04_coc"),
+      gmdss:      f => f.name.toLowerCase().startsWith("04_gmdss") || f.name.toLowerCase().startsWith("04_goc"),
+      tankerChem: f => f.name.toLowerCase().startsWith("04_tankerchem"),
+      tankerOil:  f => f.name.toLowerCase().startsWith("04_tankeroil"),
+      tanker:     f => f.name.toLowerCase().startsWith("04_tanker") &&
+                       !f.name.toLowerCase().startsWith("04_tankerchem") &&
+                       !f.name.toLowerCase().startsWith("04_tankeroil") &&
+                       !f.name.toLowerCase().startsWith("04_coc") &&
+                       !f.name.toLowerCase().startsWith("04_gmdss") &&
+                       !f.name.toLowerCase().startsWith("04_goc"),
+      med:        f => f.name.toLowerCase().startsWith("05"),
+      rok:        f => f.name.toLowerCase().startsWith("06"),
+      loc:        f => f.name.toLowerCase().startsWith("12")
+    };
 
-  const documents = {};
-  for (const [type, matchFn] of Object.entries(types)) {
-    const file = files.find(matchFn);
+    // Store File objects only — reading as base64 is deferred to execute time
+    const found = {};
+    for (const [type, matchFn] of Object.entries(types)) {
+      const file = files.find(matchFn);
+      if (file) found[type] = file;
+    }
+
+    ztbSelectedDocs = Object.keys(found).length > 0 ? found : null;
+    const statusEl  = $("ztbDocStatus");
+    if (ztbSelectedDocs) {
+      const count = Object.keys(found).length;
+      if (statusEl) { statusEl.textContent = `✓ ${count} document(s) recognised`; statusEl.className = "sfbr-status ok"; }
+      ztbUpdateStepStatus("ztbStep2", "completed");
+    } else {
+      if (statusEl) { statusEl.textContent = "No matching documents found — check file naming convention."; statusEl.className = "sfbr-status error"; }
+      ztbUpdateStepStatus("ztbStep2", "");
+    }
+    ztbCheckReady();
+  } catch (err) {
+    const statusEl = $("ztbDocStatus");
+    if (statusEl) { statusEl.textContent = `Error reading folder: ${err.message}`; statusEl.className = "sfbr-status error"; }
+  }
+}
+
+async function ztbReadDocsAsBase64(types) {
+  const result = {};
+  for (const type of types) {
+    const file = ztbSelectedDocs && ztbSelectedDocs[type];
     if (!file) continue;
-    const base64 = await new Promise(resolve => {
+    result[type] = await new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = ev => resolve(ev.target.result.split(",")[1]);
+      reader.onload  = ev => resolve({ name: file.name, data: ev.target.result.split(",")[1] });
+      reader.onerror = ()  => reject(new Error(`Could not read ${file.name}`));
       reader.readAsDataURL(file);
     });
-    documents[type] = { name: file.name, data: base64 };
   }
-
-  ztbSelectedDocs = Object.keys(documents).length > 0 ? documents : null;
-  const statusEl  = $("ztbDocStatus");
-  if (ztbSelectedDocs) {
-    const count = Object.keys(documents).length;
-    if (statusEl) { statusEl.textContent = `✓ ${count} document(s) recognised`; statusEl.className = "sfbr-status ok"; }
-    ztbUpdateStepStatus("ztbStep2", "completed");
-  } else {
-    if (statusEl) { statusEl.textContent = "No matching documents found — check file naming convention."; statusEl.className = "sfbr-status error"; }
-    ztbUpdateStepStatus("ztbStep2", "");
-  }
-  ztbCheckReady();
+  return result;
 }
 
 function ztbCheckReady() {
@@ -2030,7 +2045,9 @@ async function ztbExecute() {
   if (retryBtn) retryBtn.remove();
 
   try {
-    await callExtOp("bmar-automate", { fields: ztbCopiedData, documents: ztbSelectedDocs, options });
+    ztbSetStatus("Reading documents…", "info");
+    const documents = await ztbReadDocsAsBase64(Object.keys(ztbSelectedDocs));
+    await callExtOp("bmar-automate", { fields: ztbCopiedData, documents, options });
     // Command received — progress arrives asynchronously via window message events
   } catch (err) {
     ztbSetStatus(err.message || "Failed to start automation.", "error");
@@ -2040,12 +2057,11 @@ async function ztbExecute() {
 }
 
 async function ztbRetryUpload(failedDocs) {
-  const docsToRetry = {};
-  for (const doc of failedDocs) {
-    if (ztbSelectedDocs && ztbSelectedDocs[doc.type]) docsToRetry[doc.type] = ztbSelectedDocs[doc.type];
-  }
-  ztbSetStatus("Retrying failed uploads…", "info");
+  const typesToRetry = failedDocs.map(d => d.type).filter(t => ztbSelectedDocs && ztbSelectedDocs[t]);
+  ztbSetStatus("Reading documents for retry…", "info");
   try {
+    const docsToRetry = await ztbReadDocsAsBase64(typesToRetry);
+    ztbSetStatus("Retrying failed uploads…", "info");
     await callExtOp("bmar-upload-retry", { documents: docsToRetry });
   } catch (err) {
     ztbSetStatus(err.message || "Retry failed.", "error");
