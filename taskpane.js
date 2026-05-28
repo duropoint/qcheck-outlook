@@ -65,6 +65,7 @@ const maritimeView      = $("maritimeView");
 const salesView            = $("salesView");
 const seafarersView        = $("seafarersView");
 const seafarersBridgeView  = $("seafarersBridgeView");
+const seafarersCheckboxView = $("seafarersCheckboxView");
 const favoritesSection     = $("favoritesSection");
 const favList              = $("favList");
 const zammadSearchView     = $("zammadSearchView");
@@ -110,6 +111,7 @@ let formViewBack        = null; // back target for formView
 let zammadSearchBack    = null; // back target for zammadSearchView
 let zammadReportsBack   = null; // back target for zammadReportsView
 let bridgeViewBack      = null; // back target for seafarersBridgeView
+let checkboxViewBack    = null; // back target for seafarersCheckboxView
 let companySearchBack   = null; // back target for companySearchView
 
 let csSearchTimer    = null;
@@ -181,6 +183,16 @@ const TOOL_DEFS = {
       bridgeViewBack = origin || seafarersView;
       showSeafarersBridgeView();
     }
+  },
+  "check-all-checkboxes": {
+    icon: "☑",
+    name: "Check All Checkboxes",
+    desc: "Tick all unchecked custom checkboxes on the Seafarers Panel",
+    extOnly: true,
+    navigate(origin) {
+      checkboxViewBack = origin || seafarersView;
+      showSeafarersCheckboxView();
+    }
   }
 };
 
@@ -204,6 +216,9 @@ function applyExtOnlyVisibility() {
   // Hide extension-only tools inside the Seafarers sub-menu
   const sfbrBtn = $("tileSfbrBtn");
   if (sfbrBtn) sfbrBtn.classList.add("hidden");
+
+  const chkboxBtn = $("tileChkboxBtn");
+  if (chkboxBtn) chkboxBtn.classList.add("hidden");
 
   // Show the empty-state message so the sub-menu isn't blank
   const emptyNote = $("seafarersEmpty");
@@ -324,9 +339,15 @@ function bindEvents() {
   $("tileSfbrBtn").addEventListener("click", () => {
     TOOL_DEFS["zoho-bridge"].navigate(seafarersView);
   });
+  $("tileChkboxBtn").addEventListener("click", () => {
+    TOOL_DEFS["check-all-checkboxes"].navigate(seafarersView);
+  });
 
   // Seafarers Bridge — inject button
   $("sfbrInjectBtn").addEventListener("click", sendSfbrInject);
+
+  // Seafarers Check All Checkboxes — run button
+  $("chkboxRunBtn").addEventListener("click", sendCheckboxInject);
 
   // Star (favorites) buttons — stop propagation so tile click isn't also fired
   document.querySelectorAll(".fav-star-btn").forEach(star => {
@@ -558,7 +579,7 @@ async function testConnection() {
 
 // ---------- View switching ----------
 function showView(view) {
-  [mainView, maritimeView, salesView, seafarersView, seafarersBridgeView,
+  [mainView, maritimeView, salesView, seafarersView, seafarersBridgeView, seafarersCheckboxView,
    zammadSearchView, zammadReportsView, companySearchView,
    formView, loadingView, errorView, confirmView, companyResult, vesselResult, settingsView]
     .filter(v => v)
@@ -593,6 +614,9 @@ function updateNavChrome(view) {
   } else if (id === "seafarersBridgeView") {
     title = "Zoho BMAR Bridge";
     backTarget = bridgeViewBack || seafarersView;
+  } else if (id === "seafarersCheckboxView") {
+    title = "Check All Checkboxes";
+    backTarget = checkboxViewBack || seafarersView;
   } else if (id === "formView") {
     showToggle = !firstRun;
     backTarget = formViewBack || maritimeView;
@@ -1709,6 +1733,53 @@ function sendSfbrInject() {
   window.parent.postMessage({ type: "sfbr_inject", requestId }, "*");
 
   // Timeout — if no response, probably not in extension context
+  setTimeout(() => settle(false, "No response. Make sure you are using the EUROMAR Chrome Extension."), 6000);
+}
+
+// ---------- Seafarers — Check All Checkboxes ----------
+
+function showSeafarersCheckboxView() {
+  const isExt = isExtensionContext();
+  $("chkboxExtContent").classList.toggle("hidden", !isExt);
+  $("chkboxNonExtNote").classList.toggle("hidden", isExt);
+  const statusEl = $("chkboxStatus");
+  if (statusEl) { statusEl.textContent = ""; statusEl.className = "sfbr-status"; }
+  const runBtn = $("chkboxRunBtn");
+  if (runBtn) runBtn.disabled = false;
+  showView(seafarersCheckboxView);
+}
+
+function sendCheckboxInject() {
+  const requestId = `${Date.now()}-${Math.random()}`;
+  const statusEl  = $("chkboxStatus");
+  const runBtn    = $("chkboxRunBtn");
+
+  runBtn.disabled      = true;
+  statusEl.textContent = "Running…";
+  statusEl.className   = "sfbr-status info";
+
+  let settled = false;
+  function settle(ok, msg) {
+    if (settled) return;
+    settled = true;
+    window.removeEventListener("message", handleResp);
+    runBtn.disabled      = false;
+    statusEl.textContent = msg;
+    statusEl.className   = "sfbr-status " + (ok ? "ok" : "error");
+  }
+
+  function handleResp(event) {
+    if (!event.data || event.data.type !== "chkbox_inject_response") return;
+    if (event.data.requestId !== requestId) return;
+    if (event.data.ok) {
+      settle(true, `✓ ${event.data.count ?? 0} checkbox(es) checked.`);
+    } else {
+      settle(false, event.data.error || "Injection failed.");
+    }
+  }
+
+  window.addEventListener("message", handleResp);
+  window.parent.postMessage({ type: "chkbox_inject", requestId }, "*");
   setTimeout(() => settle(false, "No response. Make sure you are using the EUROMAR Chrome Extension."), 6000);
 }
 
