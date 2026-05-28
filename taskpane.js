@@ -1696,7 +1696,49 @@ function showSeafarersBridgeView() {
   if (statusEl) { statusEl.textContent = ""; statusEl.className = "sfbr-status"; }
   const injectBtn = $("sfbrInjectBtn");
   if (injectBtn) injectBtn.disabled = false;
+  const versionEl = $("sfbrVersion");
+  if (versionEl) versionEl.textContent = "";
   showView(seafarersBridgeView);
+  // Auto-ping the extension so the user can see the bridge is working
+  if (isExt) sendSfbrPing();
+}
+
+/**
+ * Ping the extension to verify the message bridge is alive and discover
+ * which version is loaded. If this returns nothing, the user is not in a
+ * working extension context (or hasn't reloaded the extension).
+ */
+function sendSfbrPing() {
+  const requestId = `ping-${Date.now()}-${Math.random()}`;
+  const versionEl = $("sfbrVersion");
+  if (versionEl) versionEl.textContent = "Detecting extension…";
+
+  let settled = false;
+  function handle(event) {
+    if (!event.data || event.data.type !== "sfbr_ping_response") return;
+    if (event.data.requestId !== requestId) return;
+    settled = true;
+    window.removeEventListener("message", handle);
+    const v = event.data.version || "?";
+    const tabUrl = event.data.tabInfo && event.data.tabInfo.url || "unknown";
+    if (versionEl) {
+      versionEl.innerHTML =
+        `Extension v${escHtml(v)} detected · Active tab: <code>${escHtml(tabUrl)}</code>`;
+    }
+  }
+  window.addEventListener("message", handle);
+  window.parent.postMessage({ type: "sfbr_ping", requestId }, "*");
+
+  setTimeout(() => {
+    if (settled) return;
+    window.removeEventListener("message", handle);
+    if (versionEl) {
+      versionEl.innerHTML =
+        `<strong>⚠ Extension not detected.</strong> Reload the extension at ` +
+        `<code>chrome://extensions</code> (click the ↺ icon on EUROMAR Toolkit), ` +
+        `then reopen the side panel.`;
+    }
+  }, 2500);
 }
 
 /** Send sfbr_inject postMessage to popup.js and wait for the response. */
@@ -1706,7 +1748,7 @@ function sendSfbrInject() {
   const injectBtn = $("sfbrInjectBtn");
 
   injectBtn.disabled    = true;
-  statusEl.textContent  = "Injecting…";
+  statusEl.textContent  = "Injecting… (this can take a few seconds on slow pages)";
   statusEl.className    = "sfbr-status info";
 
   let settled = false;
@@ -1723,7 +1765,9 @@ function sendSfbrInject() {
     if (!event.data || event.data.type !== "sfbr_inject_response") return;
     if (event.data.requestId !== requestId) return;
     if (event.data.ok) {
-      settle(true, "✓ Bridge injected. Navigate to the Review Extracted Data step in the Seafarers Panel — the \"Send to Zoho BMAR\" button will appear there.");
+      settle(true,
+        "✓ Bridge injected. Switch to the Seafarers Panel tab and navigate to " +
+        "the Review Extracted Data step — the \"Send to Zoho BMAR\" button will appear there.");
     } else {
       settle(false, event.data.error || "Injection failed.");
     }
@@ -1732,8 +1776,12 @@ function sendSfbrInject() {
   window.addEventListener("message", handleResp);
   window.parent.postMessage({ type: "sfbr_inject", requestId }, "*");
 
-  // Timeout — if no response, probably not in extension context
-  setTimeout(() => settle(false, "No response. Make sure you are using the EUROMAR Chrome Extension."), 6000);
+  // 20 s timeout — chrome.scripting.executeScript with world:"MAIN" can take
+  // several seconds on slow Seafarers pages
+  setTimeout(() => settle(false,
+    "No response after 20 s. The extension may not be reloaded — visit " +
+    "chrome://extensions and click ↺ on EUROMAR Toolkit, then try again."
+  ), 20000);
 }
 
 // ---------- Seafarers — Check All Checkboxes ----------
