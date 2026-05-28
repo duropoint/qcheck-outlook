@@ -1448,7 +1448,6 @@ function showSeafarersBridgeView() {
   const isExt = isExtensionContext();
   $("sfbrExtContent").classList.toggle("hidden", !isExt);
   $("sfbrNonExtNote").classList.toggle("hidden",  isExt);
-  // Reset status + button on every open
   const statusEl = $("sfbrStatus");
   if (statusEl) { statusEl.textContent = ""; statusEl.className = "sfbr-status"; }
   const injectBtn = $("sfbrInjectBtn");
@@ -1456,15 +1455,40 @@ function showSeafarersBridgeView() {
   const versionEl = $("sfbrVersion");
   if (versionEl) versionEl.textContent = "";
   showView(seafarersBridgeView);
-  // Auto-ping the extension so the user can see the bridge is working
   if (isExt) sendSfbrPing();
 }
 
 /**
- * Ping the extension to verify the message bridge is alive and discover
- * which version is loaded. If this returns nothing, the user is not in a
- * working extension context (or hasn't reloaded the extension).
+ * Generic helper — call any shell operation (exec-on-tab, css-on-tab,
+ * open-tab, get-tab-info, close-tab, notify, badge, download) and return a
+ * promise that resolves with the response payload or rejects on error.
+ *
+ * Used by Seafarers Bridge and by any future tool — no per-tool code needed
+ * in the extension shell.
  */
+function callExtOp(type, payload = {}, timeoutMs = 30000) {
+  return new Promise((resolve, reject) => {
+    const requestId = `${type}-${Date.now()}-${Math.random()}`;
+    let done = false;
+    function handler(event) {
+      if (!event.data || event.data.type !== `${type}-response`) return;
+      if (event.data.requestId !== requestId) return;
+      done = true;
+      window.removeEventListener("message", handler);
+      if (event.data.ok) resolve(event.data);
+      else reject(new Error(event.data.error || `${type} failed`));
+    }
+    window.addEventListener("message", handler);
+    window.parent.postMessage({ type, requestId, payload }, "*");
+    setTimeout(() => {
+      if (done) return;
+      window.removeEventListener("message", handler);
+      reject(new Error(`${type} timed out after ${timeoutMs}ms — extension may not be reloaded.`));
+    }, timeoutMs);
+  });
+}
+
+/** Verify the bridge is alive and display the extension version. */
 function sendSfbrPing() {
   const requestId = `ping-${Date.now()}-${Math.random()}`;
   const versionEl = $("sfbrVersion");
@@ -1472,73 +1496,58 @@ function sendSfbrPing() {
 
   let settled = false;
   function handle(event) {
-    if (!event.data || event.data.type !== "sfbr_ping_response") return;
+    if (!event.data) return;
+    if (event.data.type !== "ping-response" && event.data.type !== "sfbr_ping_response") return;
     if (event.data.requestId !== requestId) return;
     settled = true;
     window.removeEventListener("message", handle);
     const v = event.data.version || "?";
-    const tabUrl = event.data.tabInfo && event.data.tabInfo.url || "unknown";
+    const tabUrl = (event.data.tabInfo && event.data.tabInfo.url) || "unknown";
     if (versionEl) {
       versionEl.innerHTML =
         `Extension v${escHtml(v)} detected · Active tab: <code>${escHtml(tabUrl)}</code>`;
     }
   }
   window.addEventListener("message", handle);
-  window.parent.postMessage({ type: "sfbr_ping", requestId }, "*");
+  window.parent.postMessage({ type: "ping", requestId }, "*");
 
   setTimeout(() => {
     if (settled) return;
     window.removeEventListener("message", handle);
     if (versionEl) {
       versionEl.innerHTML =
-        `<strong>⚠ Extension not detected.</strong> Reload the extension at ` +
-        `<code>chrome://extensions</code> (click the ↺ icon on EUROMAR Toolkit), ` +
-        `then reopen the side panel.`;
+        `<strong>⚠ Extension not detected.</strong> Make sure the EUROMAR Toolkit extension is installed and reloaded.`;
     }
   }, 2500);
 }
 
-/** Send sfbr_inject postMessage to popup.js and wait for the response. */
-function sendSfbrInject() {
-  const requestId = `${Date.now()}-${Math.random()}`;
+/**
+ * Inject the Seafarers Zoho bridge using only generic shell operations.
+ * No extension-side knowledge of "Zoho" — just CSS + JS injection by URL.
+ * To add a new tool in the future, the same two ops are enough.
+ */
+async function sendSfbrInject() {
   const statusEl  = $("sfbrStatus");
   const injectBtn = $("sfbrInjectBtn");
 
   injectBtn.disabled    = true;
-  statusEl.textContent  = "Injecting… (this can take a few seconds on slow pages)";
+  statusEl.textContent  = "Injecting…";
   statusEl.className    = "sfbr-status info";
 
-  let settled = false;
-  function settle(ok, msg) {
-    if (settled) return;
-    settled = true;
-    window.removeEventListener("message", handleResp);
-    injectBtn.disabled   = false;
-    statusEl.textContent = msg;
-    statusEl.className   = "sfbr-status " + (ok ? "ok" : "error");
+  try {
+    await callExtOp("css-on-tab",  { tabId: "active", cssUrl:    "sfbr-styles.css" });
+    await callExtOp("exec-on-tab", { tabId: "active", scriptUrl: "sfbr-seafarers.js", world: "MAIN" });
+
+    statusEl.textContent =
+      "✓ Bridge injected. Switch to the Seafarers Panel tab and navigate to " +
+      "the Review Extracted Data step — the \"Send to Zoho BMAR\" button will appear there.";
+    statusEl.className = "sfbr-status ok";
+  } catch (err) {
+    statusEl.textContent = err.message || "Injection failed.";
+    statusEl.className   = "sfbr-status error";
+  } finally {
+    injectBtn.disabled = false;
   }
-
-  function handleResp(event) {
-    if (!event.data || event.data.type !== "sfbr_inject_response") return;
-    if (event.data.requestId !== requestId) return;
-    if (event.data.ok) {
-      settle(true,
-        "✓ Bridge injected. Switch to the Seafarers Panel tab and navigate to " +
-        "the Review Extracted Data step — the \"Send to Zoho BMAR\" button will appear there.");
-    } else {
-      settle(false, event.data.error || "Injection failed.");
-    }
-  }
-
-  window.addEventListener("message", handleResp);
-  window.parent.postMessage({ type: "sfbr_inject", requestId }, "*");
-
-  // 20 s timeout — chrome.scripting.executeScript with world:"MAIN" can take
-  // several seconds on slow Seafarers pages
-  setTimeout(() => settle(false,
-    "No response after 20 s. The extension may not be reloaded — visit " +
-    "chrome://extensions and click ↺ on EUROMAR Toolkit, then try again."
-  ), 20000);
 }
 
 // ---------- Zammad Reports ----------

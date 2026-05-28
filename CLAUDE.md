@@ -21,12 +21,15 @@ env.js                 Environment abstraction (Outlook / Chrome extension / bro
 manifest.xml           Outlook Add-in manifest
 functionfile.html      Required by manifest.xml; calls Office.onReady() only
 INSTALL.md             End-user install instructions
-euromar-toolkit-chrome/   Chrome Extension shell
+scripts/               Hosted tool scripts fetched at run-time by the extension shell
+  sfbr-seafarers.js
+  sfbr-zoho.js
+  sfbr-styles.css
+euromar-toolkit-chrome/   Chrome Extension thin shell (v2.0.0+)
   manifest.json
   background.js
-  popup.js
-  popup.html
-  popup.css
+  popup.js / popup.html / popup.css
+  relay.js             Generic ISOLATED-world relay (never changes)
   icons/
 ```
 
@@ -98,53 +101,81 @@ Five settings stored per-environment (see `env.js` table above):
 
 `colorClass(value)` → `"green"` / `"amber"` / `"red"`. Check `"not acceptable"` and `"very low"` before `"low"`, and `"high"` before the default fallback.
 
-## Chrome Extension shell (`euromar-toolkit-chrome/`)
+## Chrome Extension shell (`euromar-toolkit-chrome/`) — v2.0.0 generic shell
 
 ### Architecture
 
-The extension is a **thin shell** — no tool logic lives here. All tools load from the hosted URL via an iframe in the side panel.
+From v2.0.0 the extension is a **fixed thin shell** — it exposes 8 generic operations and never needs updating for new tools. All tool logic (Zoho bridge, future tools) is hosted under `/scripts/` on GitHub Pages and fetched at run-time.
 
 ```
-TOOLKIT_URL constant (top of background.js and popup.js)
-     ↓ iframe src
-taskpane.html (GitHub Pages)
-     ↓ postMessage
-popup.js (extension page)
-     ↓ chrome.runtime.sendMessage
-background.js (service worker)
+euromar-toolkit-chrome/
+  manifest.json          permissions: scripting, tabs, notifications, downloads, contextMenus, storage, sidePanel
+  background.js          relay receiver + same 8 ops for relay-originated requests
+  popup.js               iframe ↔ chrome.* bridge with 8 ops
+  popup.html / popup.css unchanged
+  relay.js               GENERIC ISOLATED-world relay (never changes)
+  icons/
+
+scripts/                 (HOSTED, auto-deploys via GitHub Pages)
+  sfbr-seafarers.js      Zoho bridge — Seafarers Panel side
+  sfbr-zoho.js           Zoho bridge — Zoho form side
+  sfbr-styles.css        Styles for both
+  ...future tool scripts
 ```
 
-### Message bridge
+### The 8 generic shell ops
 
-Two bridge types, both initiated by the iframe via `window.parent.postMessage`:
+The hosted toolkit (taskpane.js) calls `callExtOp(type, payload)` which posts a message to popup.js and returns a Promise. Op handlers live in popup.js (for iframe-originated requests) and in background.js (for relay-originated requests — duplicated handlers because the two contexts cannot share modules).
 
-| `type` | Direction | Purpose |
+| Op | Payload | Purpose |
 |---|---|---|
-| `toolkit-api` | iframe → popup → background → fetch → back | Generic API POST to the backend |
-| `zvl_fill` | iframe → popup → background → `executeScript` | Fill vessel fields in active Zammad tab |
+| `exec-on-tab` | `{ tabId, scriptUrl, world }` | Fetch JS from `/scripts/<scriptUrl>` and run in tab. Auto-injects relay.js. Default world: MAIN. |
+| `css-on-tab` | `{ tabId, cssUrl }` | Fetch CSS and inject |
+| `open-tab` | `{ url, ops?, delay? }` | Open URL, wait for complete, run ops sequentially against the new tab |
+| `get-tab-info` | `{ tabId }` (or "active") | Return id/url/title |
+| `close-tab` | `{ tabId }` | Close a tab |
+| `notify` | `{ title, message, iconUrl? }` | Chrome OS notification |
+| `badge` | `{ text, color? }` | Set extension icon badge |
+| `download` | `{ url, filename?, saveAs? }` | Download file via chrome.downloads |
 
-Responses are posted back to the iframe at `TOOLKIT_ORIGIN` with a matching `requestId`.
+### Hosted scripts ↔ shell signalling
+
+Hosted scripts run in MAIN world and have no `chrome.*` access. To call back to the shell (e.g. open another tab, badge, download), they emit a relay-signal element:
+
+```js
+const el = document.createElement('span');
+el.className = '__euromar_relay__';
+el.setAttribute('data-euromar-action', 'open-tab');
+el.setAttribute('data-euromar-payload', JSON.stringify({ url: '...', ops: [...] }));
+document.documentElement.appendChild(el);
+```
+
+`relay.js` (always auto-injected in ISOLATED world by `exec-on-tab`) watches for these elements via `MutationObserver`, parses the payload, and forwards to `background.js` via `chrome.runtime.sendMessage({ source: 'relay', action, payload })`. background.js dispatches through its own copy of the op handlers.
+
+### MAIN-world CSP caveat
+
+`exec-on-tab` injects fetched code via `new Function(code).call(window)` running in MAIN world. This is subject to the page's `script-src 'unsafe-eval'` CSP. Normal web apps (Seafarers Panel, Zoho forms, Zammad) allow it. Hardened pages (e.g. banking sites) may not — those pages would need a per-page workaround.
+
+### Backwards-compat handlers
+
+`popup.js` and `background.js` keep two legacy paths so existing features don't break:
+- `toolkit-api` — generic API POST to the QCheck backend
+- `zvl_fill` — Vessel Search → Zammad ticket fill (still uses inline `injectFillVessel` function)
 
 ### `?context=extension`
 
-`popup.js` always appends `?context=extension` to the iframe URL. `taskpane.js` reads this parameter to show the **"… into Zammad Case"** button in the Vessel Search detail view, since `Env.env` is `"browser"` inside the iframe (the `chrome` object is not available to web-origin iframes).
+`popup.js` always appends `?context=extension` to the iframe URL. `taskpane.js` reads this to detect the Chrome extension context, since `Env.env` is `"browser"` inside the hosted iframe.
 
 ### When to reload / reinstall the extension
 
-**Reload only** (click ↺ on `chrome://extensions`, settings preserved) — required whenever any file inside `euromar-toolkit-chrome/` changes:
-- `background.js`, `popup.js`, new injected scripts, CSS files, icons, etc.
+After the v2.0.0 refactor: **the extension folder should not need changes for new tools**. New tool = push a JS file to `scripts/` on `main`.
 
-**Reinstall** (unload + reload unpacked, or publish a new version) — only when `euromar-toolkit-chrome/manifest.json` itself changes in a structural way:
-- New permissions
-- New context menu entries
-- New `content_scripts` declarations
+**Reload only** (click ↺ on `chrome://extensions`, settings preserved) — required only if a file inside `euromar-toolkit-chrome/` itself changes (shell logic, relay, popup HTML/CSS).
 
-`host_permissions` is set to `<all_urls>` so new tools and new domains **never** require a manifest change. DOM injection on any site is handled via `chrome.scripting.executeScript` directly from `background.js` — no `content_scripts` registration needed.
+**Reinstall** (zip / "Load unpacked" again) — only when `manifest.json` permissions change. This should be a rare event.
 
-UI changes, new tools, API logic changes, new domain interactions → update hosted files on `main` only.
-
-> **⚠️ Always ask the user before implementing anything that requires a Chrome Extension reload or reinstall.**
-> If a feature cannot be built without modifying `euromar-toolkit-chrome/` (reload) or changing `manifest.json` (reinstall), stop and confirm with the user before writing any code.
+> **⚠️ Always ask the user before implementing anything that requires modifying the extension folder or `manifest.json`.**
+> The whole point of the v2.0.0 shell is to make this unnecessary for new tools. If you find yourself needing to add a file to `euromar-toolkit-chrome/`, stop — there is almost certainly a way to express the feature using the 8 existing ops with a hosted script.
 
 ## CORS
 

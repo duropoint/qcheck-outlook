@@ -1,10 +1,17 @@
-const TOOLKIT_URL = "https://duropoint.github.io/qcheck-outlook/taskpane.html";
+// background.js — service worker.
+// Handles:
+//   - Side-panel install + context menu (unchanged)
+//   - The legacy toolkit-api and zvl_fill paths (called by popup.js)
+//   - Relay-originated messages from hosted tool scripts (via relay.js)
+//
+// The relay path uses the same 8 generic ops as popup.js so a script
+// injected into any page can request follow-up actions (open another tab,
+// fill it, badge, notify, download, etc.) without going back to popup.
 
-// ── Context menu + side panel behaviour on install ───────────────────────────
+const SCRIPTS_BASE = "https://duropoint.github.io/qcheck-outlook/scripts/";
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
-
   chrome.contextMenus.create({
     id: "euromar-toolkit-menu",
     title: "EUROMAR Toolkit",
@@ -12,22 +19,16 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-// ── Context menu click → extract number, open side panel ─────────────────────
-
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const selection = info.selectionText ?? "";
   const match = selection.match(/\d{4,7}/);
-
-  if (match) {
-    await chrome.storage.session.set({ pendingSelection: match[0] });
-  }
-
+  if (match) await chrome.storage.session.set({ pendingSelection: match[0] });
   await chrome.sidePanel.open({ windowId: tab.windowId });
 });
 
-// ── Message router ────────────────────────────────────────────────────────────
+// ── Message router ──────────────────────────────────────────────────────────
 
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === "toolkit-api") {
     handleApiCall(msg).then(sendResponse);
     return true;
@@ -36,17 +37,173 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     handleZvlFill(msg.vessel).then(sendResponse);
     return true;
   }
-  if (msg.action === "sfbr_open_zoho") {
-    // Called by the relay script (ISOLATED world) in the Seafarers tab
-    handleSfbrOpenZoho(msg.url).catch(console.error);
-    sendResponse({ ok: true });
-    return false;
+  if (msg.source === "relay" && typeof msg.action === "string") {
+    handleRelay(msg.action, msg.payload || {}, sender)
+      .then(sendResponse)
+      .catch(err => {
+        console.error(`[Toolkit/bg] relay action ${msg.action} failed:`, err);
+        sendResponse({ ok: false, error: err.message });
+      });
+    return true;
   }
 });
 
-// ── Zammad fill ───────────────────────────────────────────────────────────────
-// Injects a self-contained fill function directly into the active Zammad tab.
-// No content script registration needed — works on any domain via <all_urls>.
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+async function fetchText(url) {
+  const fullUrl = url.startsWith("http") ? url : SCRIPTS_BASE + url;
+  const resp = await fetch(fullUrl, { cache: "no-cache" });
+  if (!resp.ok) throw new Error(`Fetch ${fullUrl} failed: ${resp.status}`);
+  return await resp.text();
+}
+
+function waitForTabComplete(tabId) {
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      chrome.tabs.onUpdated.removeListener(listener);
+      resolve();
+    }, 25000);
+    const listener = (id, changeInfo) => {
+      if (id === tabId && changeInfo.status === "complete") {
+        clearTimeout(timeout);
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve();
+      }
+    };
+    chrome.tabs.onUpdated.addListener(listener);
+  });
+}
+
+// ── Generic operations (same set as popup.js) ───────────────────────────────
+
+async function opExecOnTab({ tabId, scriptUrl, world }) {
+  if (!tabId) throw new Error("exec-on-tab requires tabId");
+  const code = await fetchText(scriptUrl);
+  await chrome.scripting.executeScript({
+    target: { tabId }, files: ["relay.js"], world: "ISOLATED"
+  });
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    world: world === "ISOLATED" ? "ISOLATED" : "MAIN",
+    func: (code, url) => {
+      try { new Function(code).call(window); }
+      catch (e) { console.error("[EUROMAR] script error", url, e); throw e; }
+    },
+    args: [code, scriptUrl]
+  });
+  return { ok: true, tabId };
+}
+
+async function opCssOnTab({ tabId, cssUrl }) {
+  if (!tabId) throw new Error("css-on-tab requires tabId");
+  const css = await fetchText(cssUrl);
+  await chrome.scripting.insertCSS({ target: { tabId }, css });
+  return { ok: true, tabId };
+}
+
+async function opOpenTab({ url, ops, delay }) {
+  const tab = await chrome.tabs.create({ url });
+  await waitForTabComplete(tab.id);
+  if (delay) await new Promise(r => setTimeout(r, delay));
+  if (Array.isArray(ops)) {
+    for (const op of ops) {
+      await dispatchOp(op.type, { ...(op.payload || {}), tabId: tab.id });
+    }
+  }
+  return { ok: true, tabId: tab.id };
+}
+
+async function opGetTabInfo({ tabId }) {
+  if (!tabId) throw new Error("get-tab-info requires tabId");
+  const tab = await chrome.tabs.get(tabId);
+  return { ok: true, id: tab.id, url: tab.url || "", title: tab.title || "" };
+}
+
+async function opCloseTab({ tabId }, sender) {
+  const id = tabId || sender?.tab?.id;
+  if (!id) throw new Error("close-tab requires tabId");
+  await chrome.tabs.remove(id);
+  return { ok: true };
+}
+
+async function opNotify({ title, message, iconUrl }) {
+  await chrome.notifications.create({
+    type:    "basic",
+    iconUrl: iconUrl || "icons/icon-128.png",
+    title:   title   || "EUROMAR Toolkit",
+    message: message || ""
+  });
+  return { ok: true };
+}
+
+async function opBadge({ text, color }) {
+  await chrome.action.setBadgeText({ text: text == null ? "" : String(text) });
+  if (color) await chrome.action.setBadgeBackgroundColor({ color });
+  return { ok: true };
+}
+
+async function opDownload({ url, filename, saveAs }) {
+  const downloadId = await chrome.downloads.download({
+    url,
+    filename: filename || undefined,
+    saveAs:   !!saveAs
+  });
+  return { ok: true, downloadId };
+}
+
+async function dispatchOp(type, payload, sender) {
+  switch (type) {
+    case "exec-on-tab":  return opExecOnTab(payload);
+    case "css-on-tab":   return opCssOnTab(payload);
+    case "open-tab":     return opOpenTab(payload);
+    case "get-tab-info": return opGetTabInfo(payload);
+    case "close-tab":    return opCloseTab(payload, sender);
+    case "notify":       return opNotify(payload);
+    case "badge":        return opBadge(payload);
+    case "download":     return opDownload(payload);
+    default: throw new Error(`Unknown operation: ${type}`);
+  }
+}
+
+// ── Relay handler ───────────────────────────────────────────────────────────
+// A hosted tool script (running in MAIN world on some target page) emitted
+// a signal element; relay.js (ISOLATED) caught it and forwarded the action
+// here. We just dispatch.
+
+async function handleRelay(action, payload, sender) {
+  return await dispatchOp(action, payload, sender);
+}
+
+// ── Backwards-compat (existing toolkit features) ────────────────────────────
+
+async function handleApiCall(msg) {
+  const stored = await chrome.storage.local.get(["apiBase", "apiKey"]);
+  const apiBase = stored.apiBase ?? "https://pscplatformalpha.onrender.com";
+  const apiKey  = stored.apiKey;
+  if (!apiKey) return { ok: false, error: "API key not set. Configure it in the toolkit settings." };
+
+  const controller = new AbortController();
+  const timeoutId  = setTimeout(() => controller.abort(), 120_000);
+  try {
+    const response = await fetch(`${apiBase}${msg.endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
+      body: JSON.stringify(msg.body),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    if (!response.ok) {
+      let errorMsg = response.statusText;
+      try { const j = await response.json(); if (j.error) errorMsg = j.error; } catch {}
+      return { ok: false, error: errorMsg, status: response.status };
+    }
+    return { ok: true, data: await response.json() };
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === "AbortError") return { ok: false, error: "Request timed out after 120 seconds" };
+    return { ok: false, error: err.message };
+  }
+}
 
 async function handleZvlFill(vessel) {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -65,7 +222,6 @@ async function handleZvlFill(vessel) {
   }
 }
 
-// Injected into the Zammad page — must be fully self-contained (no closure refs).
 function injectFillVessel(vessel) {
   function setNativeValue(el, value) {
     const proto  = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
@@ -75,7 +231,6 @@ function injectFillVessel(vessel) {
     el.dispatchEvent(new Event("change", { bubbles: true }));
     el.dispatchEvent(new Event("blur",   { bubbles: true }));
   }
-
   function fillField(names, value) {
     if (!value) return false;
     for (const n of names) {
@@ -98,12 +253,10 @@ function injectFillVessel(vessel) {
     }
     return false;
   }
-
   function formatNumber(v) {
     const n = Number(String(v).replace(/[^\d.-]/g, ""));
     return Number.isFinite(n) ? n.toLocaleString("en-US") : String(v);
   }
-
   function buildVesselDetails(r) {
     const today = new Date().toISOString().slice(0, 10);
     const gt    = r.gross_tonnage ? formatNumber(r.gross_tonnage) : "";
@@ -115,112 +268,9 @@ function injectFillVessel(vessel) {
       `Updated: ${today}`
     ].filter(Boolean).join("\n");
   }
-
   const details = buildVesselDetails(vessel);
-  const filledName    = fillField(["vessel_name",    "vesselname",    "vessel-name"],             vessel.vessel_name  || "");
-  const filledImo     = fillField(["vessel_imo",     "vesselimo",     "vessel-imo",     "imo"],   String(vessel.vessel_imo || ""));
-  const filledDetails = fillField(["vessel_details", "vesseldetails", "vessel-details"],          details);
-
+  const filledName    = fillField(["vessel_name", "vesselname", "vessel-name"],            vessel.vessel_name  || "");
+  const filledImo     = fillField(["vessel_imo",  "vesselimo",  "vessel-imo",  "imo"],     String(vessel.vessel_imo || ""));
+  const filledDetails = fillField(["vessel_details", "vesseldetails", "vessel-details"],   details);
   return { ok: filledName || filledImo || filledDetails };
-}
-
-// ── Seafarers → Zoho BMAR Bridge ─────────────────────────────────────────────
-//
-// Injection (sfbr_inject) is now handled directly in popup.js to avoid the
-// MV3 service-worker response-dropping issue.
-//
-// Remaining flow handled here:
-//   1. User clicks "Send to Zoho BMAR" on the Seafarers Panel.
-//      sfbr-seafarers.js (MAIN) writes the URL to a DOM attribute and
-//      sfbr-relay.js (ISOLATED) picks it up via MutationObserver, then calls
-//      chrome.runtime.sendMessage({ action: "sfbr_open_zoho", url }).
-//   2. sfbr_open_zoho handler creates the Zoho tab, waits for it to load, then
-//      injects sfbr-zoho.js (MAIN) + sfbr-styles.css — the fill banner appears.
-
-async function handleSfbrOpenZoho(url) {
-  // Open the Zoho form in a new tab (URL already contains the base64 data in the hash)
-  const tab = await chrome.tabs.create({ url });
-  // Wait for the tab to fully load before injecting
-  await waitForTabComplete(tab.id);
-  // Small extra buffer for JS-heavy forms to finish rendering
-  await new Promise(r => setTimeout(r, 1200));
-  try {
-    await chrome.scripting.insertCSS({
-      target: { tabId: tab.id },
-      files: ["sfbr-styles.css"]
-    });
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ["sfbr-zoho.js"],
-      world: "MAIN"
-    });
-  } catch (err) {
-    console.error("[SFBR] Failed to inject into Zoho tab:", err);
-  }
-}
-
-/** Resolves when the given tab reaches status "complete", or after a timeout. */
-function waitForTabComplete(tabId) {
-  return new Promise((resolve) => {
-    const timeout = setTimeout(() => {
-      chrome.tabs.onUpdated.removeListener(listener);
-      resolve();
-    }, 20000);
-
-    const listener = (id, changeInfo) => {
-      if (id === tabId && changeInfo.status === "complete") {
-        clearTimeout(timeout);
-        chrome.tabs.onUpdated.removeListener(listener);
-        resolve();
-      }
-    };
-    chrome.tabs.onUpdated.addListener(listener);
-  });
-}
-
-// ── Generic API bridge ────────────────────────────────────────────────────────
-
-async function handleApiCall(msg) {
-  const stored = await chrome.storage.local.get(["apiBase", "apiKey"]);
-  const apiBase = stored.apiBase ?? "https://pscplatformalpha.onrender.com";
-  const apiKey  = stored.apiKey;
-
-  if (!apiKey) {
-    return { ok: false, error: "API key not set. Configure it in the toolkit settings." };
-  }
-
-  const controller = new AbortController();
-  const timeoutId  = setTimeout(() => controller.abort(), 120_000);
-
-  try {
-    const response = await fetch(`${apiBase}${msg.endpoint}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-Key": apiKey
-      },
-      body: JSON.stringify(msg.body),
-      signal: controller.signal
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      let errorMsg = response.statusText;
-      try {
-        const errBody = await response.json();
-        if (errBody.error) errorMsg = errBody.error;
-      } catch { /* ignore parse failures */ }
-      return { ok: false, error: errorMsg, status: response.status };
-    }
-
-    const data = await response.json();
-    return { ok: true, data };
-  } catch (err) {
-    clearTimeout(timeoutId);
-    if (err.name === "AbortError") {
-      return { ok: false, error: "Request timed out after 120 seconds" };
-    }
-    return { ok: false, error: err.message };
-  }
 }

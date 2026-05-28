@@ -1,14 +1,15 @@
-const TOOLKIT_URL = "https://duropoint.github.io/qcheck-outlook/taskpane.html";
+// popup.js — message bridge between the hosted toolkit iframe and the
+// extension's Chrome APIs. Handles all 8 generic operations directly so
+// future tools can be added without touching this file.
+
+const TOOLKIT_URL    = "https://duropoint.github.io/qcheck-outlook/taskpane.html";
 const TOOLKIT_ORIGIN = new URL(TOOLKIT_URL).origin;
-const iframe = document.getElementById("contentFrame");
+const SCRIPTS_BASE   = "https://duropoint.github.io/qcheck-outlook/scripts/";
 
-// Always append ?context=extension so the hosted toolkit knows it's in the shell
+const iframe   = document.getElementById("contentFrame");
 const BASE_SRC = `${TOOLKIT_URL}?context=extension`;
-
-// Set src synchronously so the panel never opens blank
 iframe.src = BASE_SRC;
 
-// Then check if a context-menu selection is waiting and append it
 chrome.storage.session.get("pendingSelection")
   .then(({ pendingSelection }) => {
     if (!pendingSelection) return;
@@ -24,158 +25,243 @@ chrome.storage.session.onChanged.addListener((changes) => {
   iframe.src = `${BASE_SRC}&selection=${encodeURIComponent(newValue)}`;
 });
 
-// ── Message bridge ────────────────────────────────────────────────────────────
-// Accept messages from the toolkit origin (more reliable than comparing
-// against iframe.contentWindow, which can become stale across re-navigations).
+// ── Helpers ─────────────────────────────────────────────────────────────────
 
 function reply(payload) {
-  // Use "*" as the target origin: the hosted iframe is at TOOLKIT_ORIGIN but we
-  // want the response to always be delivered, even if the iframe's effective
-  // origin appears different after navigation. The payload itself is harmless.
-  try {
-    iframe.contentWindow.postMessage(payload, "*");
-  } catch (err) {
-    console.error("[Toolkit] Failed to post response back to iframe:", err);
-  }
+  try { iframe.contentWindow.postMessage(payload, "*"); }
+  catch (err) { console.error("[Toolkit] reply failed:", err); }
 }
 
 async function findActiveTab() {
-  // Side panels run in a window context. Try currentWindow first, then fall
-  // back to lastFocusedWindow (handles edge cases where the side panel itself
-  // is the focused surface).
   let tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tabs.length) tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   return tabs[0] || null;
 }
 
+async function resolveTabId(tabId) {
+  if (tabId && tabId !== "active") return tabId;
+  const tab = await findActiveTab();
+  if (!tab) throw new Error("No active tab found.");
+  return tab.id;
+}
+
+async function fetchText(url) {
+  const fullUrl = url.startsWith("http") ? url : SCRIPTS_BASE + url;
+  const resp = await fetch(fullUrl, { cache: "no-cache" });
+  if (!resp.ok) throw new Error(`Fetch ${fullUrl} failed: ${resp.status}`);
+  return await resp.text();
+}
+
+function waitForTabComplete(tabId) {
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      chrome.tabs.onUpdated.removeListener(listener);
+      resolve();
+    }, 25000);
+    const listener = (id, changeInfo) => {
+      if (id === tabId && changeInfo.status === "complete") {
+        clearTimeout(timeout);
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve();
+      }
+    };
+    chrome.tabs.onUpdated.addListener(listener);
+  });
+}
+
+// ── Generic operations ──────────────────────────────────────────────────────
+
+async function opExecOnTab({ tabId, scriptUrl, world }) {
+  const id = await resolveTabId(tabId);
+  const code = await fetchText(scriptUrl);
+
+  // Always inject the generic relay (ISOLATED) so the hosted script can call back.
+  // Idempotent — guarded by window.__euromarRelayInstalled inside relay.js.
+  await chrome.scripting.executeScript({
+    target: { tabId: id },
+    files:  ["relay.js"],
+    world:  "ISOLATED"
+  });
+
+  // Inject the hosted code in the requested world via new Function().
+  // For MAIN world this is subject to page CSP (script-src 'unsafe-eval').
+  // For ISOLATED world the extension's own CSP allows it.
+  const targetWorld = world === "ISOLATED" ? "ISOLATED" : "MAIN";
+  await chrome.scripting.executeScript({
+    target: { tabId: id },
+    world:  targetWorld,
+    func: (code, url) => {
+      try { new Function(code).call(window); }
+      catch (e) { console.error("[EUROMAR] script error", url, e); throw e; }
+    },
+    args: [code, scriptUrl]
+  });
+
+  return { ok: true, tabId: id };
+}
+
+async function opCssOnTab({ tabId, cssUrl }) {
+  const id = await resolveTabId(tabId);
+  const css = await fetchText(cssUrl);
+  await chrome.scripting.insertCSS({ target: { tabId: id }, css });
+  return { ok: true, tabId: id };
+}
+
+async function opOpenTab({ url, ops, delay }) {
+  const tab = await chrome.tabs.create({ url });
+  await waitForTabComplete(tab.id);
+  if (delay) await new Promise(r => setTimeout(r, delay));
+  if (Array.isArray(ops)) {
+    for (const op of ops) {
+      await dispatchOp(op.type, { ...(op.payload || {}), tabId: tab.id });
+    }
+  }
+  return { ok: true, tabId: tab.id };
+}
+
+async function opGetTabInfo({ tabId }) {
+  if (!tabId || tabId === "active") {
+    const tab = await findActiveTab();
+    if (!tab) throw new Error("No active tab found.");
+    return { ok: true, id: tab.id, url: tab.url || "", title: tab.title || "" };
+  }
+  const tab = await chrome.tabs.get(tabId);
+  return { ok: true, id: tab.id, url: tab.url || "", title: tab.title || "" };
+}
+
+async function opCloseTab({ tabId }) {
+  await chrome.tabs.remove(tabId);
+  return { ok: true };
+}
+
+async function opNotify({ title, message, iconUrl }) {
+  await chrome.notifications.create({
+    type:    "basic",
+    iconUrl: iconUrl || "icons/icon-128.png",
+    title:   title   || "EUROMAR Toolkit",
+    message: message || ""
+  });
+  return { ok: true };
+}
+
+async function opBadge({ text, color }) {
+  await chrome.action.setBadgeText({ text: text == null ? "" : String(text) });
+  if (color) await chrome.action.setBadgeBackgroundColor({ color });
+  return { ok: true };
+}
+
+async function opDownload({ url, filename, saveAs }) {
+  const downloadId = await chrome.downloads.download({
+    url,
+    filename: filename || undefined,
+    saveAs:   !!saveAs
+  });
+  return { ok: true, downloadId };
+}
+
+async function dispatchOp(type, payload) {
+  switch (type) {
+    case "exec-on-tab":  return opExecOnTab(payload);
+    case "css-on-tab":   return opCssOnTab(payload);
+    case "open-tab":     return opOpenTab(payload);
+    case "get-tab-info": return opGetTabInfo(payload);
+    case "close-tab":    return opCloseTab(payload);
+    case "notify":       return opNotify(payload);
+    case "badge":        return opBadge(payload);
+    case "download":     return opDownload(payload);
+    default: throw new Error(`Unknown operation: ${type}`);
+  }
+}
+
+const GENERIC_OPS = new Set([
+  "exec-on-tab", "css-on-tab", "open-tab", "get-tab-info",
+  "close-tab", "notify", "badge", "download"
+]);
+
+// ── Message bridge ──────────────────────────────────────────────────────────
+
 window.addEventListener("message", async (event) => {
   if (event.origin !== TOOLKIT_ORIGIN) return;
-
   const msg = event.data;
   if (!msg || typeof msg.type !== "string") return;
 
-  console.log("[Toolkit/popup] received:", msg.type, msg.requestId || "");
+  console.log("[Toolkit/popup]", msg.type, msg.requestId || "");
 
-  switch (msg.type) {
-    case "close":
-      window.close();
-      break;
+  // Diagnostic ping
+  if (msg.type === "ping" || msg.type === "sfbr_ping") {
+    reply({
+      type:      msg.type === "ping" ? "ping-response" : "sfbr_ping_response",
+      requestId: msg.requestId,
+      ok:        true,
+      version:   chrome.runtime.getManifest().version,
+      tabInfo:   await safeTabInfo()
+    });
+    return;
+  }
 
-    case "resize":
-      // Reserved for future use
-      break;
-
-    // Diagnostic: tells the toolkit which extension version is responding,
-    // so we can confirm the new code is loaded.
-    case "sfbr_ping": {
-      const requestId = msg.requestId ?? `${Date.now()}-${Math.random()}`;
-      const version = chrome.runtime.getManifest().version;
-      let tabInfo = null;
-      try {
-        const tab = await findActiveTab();
-        if (tab) {
-          tabInfo = {
-            id:    tab.id,
-            url:   tab.url || "(url not available — host_permissions may be missing)",
-            title: tab.title || ""
-          };
-        }
-      } catch (err) {
-        tabInfo = { error: err.message };
-      }
-      reply({ type: "sfbr_ping_response", requestId, ok: true, version, tabInfo });
-      break;
+  // Generic shell operations
+  if (GENERIC_OPS.has(msg.type)) {
+    try {
+      const result = await dispatchOp(msg.type, msg.payload || {});
+      reply({ type: `${msg.type}-response`, requestId: msg.requestId, ...result });
+    } catch (err) {
+      console.error(`[Toolkit] ${msg.type} failed:`, err);
+      reply({ type: `${msg.type}-response`, requestId: msg.requestId, ok: false, error: err.message });
     }
+    return;
+  }
 
-    case "toolkit-api": {
-      const requestId = msg.requestId ?? `${Date.now()}-${Math.random()}`;
-      try {
-        const response = await chrome.runtime.sendMessage({
-          action: "toolkit-api",
-          endpoint: msg.endpoint,
-          body: msg.body
-        });
-        reply({ type: "toolkit-api-response", requestId, ...response });
-      } catch (err) {
-        reply({ type: "toolkit-api-response", requestId, ok: false, error: err.message });
-      }
-      break;
+  // ── Backwards-compat handlers (existing toolkit features) ────────────────
+
+  if (msg.type === "close") { window.close(); return; }
+  if (msg.type === "resize") return; // reserved
+
+  if (msg.type === "toolkit-api") {
+    const requestId = msg.requestId ?? `${Date.now()}-${Math.random()}`;
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: "toolkit-api", endpoint: msg.endpoint, body: msg.body
+      });
+      reply({ type: "toolkit-api-response", requestId, ...response });
+    } catch (err) {
+      reply({ type: "toolkit-api-response", requestId, ok: false, error: err.message });
     }
+    return;
+  }
 
-    case "zvl_fill": {
-      const requestId = msg.requestId ?? `${Date.now()}-${Math.random()}`;
-      try {
-        const response = await chrome.runtime.sendMessage({
-          action: "zvl_fill",
-          vessel: msg.vessel
-        });
-        reply({ type: "zvl_fill_response", requestId, ...response });
-      } catch (err) {
-        reply({ type: "zvl_fill_response", requestId, ok: false, error: err.message });
-      }
-      break;
+  if (msg.type === "zvl_fill") {
+    const requestId = msg.requestId ?? `${Date.now()}-${Math.random()}`;
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: "zvl_fill", vessel: msg.vessel
+      });
+      reply({ type: "zvl_fill_response", requestId, ...response });
+    } catch (err) {
+      reply({ type: "zvl_fill_response", requestId, ok: false, error: err.message });
     }
+    return;
+  }
 
-    case "sfbr_inject": {
-      const requestId = msg.requestId ?? `${Date.now()}-${Math.random()}`;
-      const SFBR_ORIGINS = [
-        "https://seafarers.eu-registry.com",
-        "https://seafarers-web-test.idego.io"
-      ];
-      let step = "find tab";
-      try {
-        const tab = await findActiveTab();
-        if (!tab) throw new Error("No active tab found in the current window.");
-        if (!tab.id) throw new Error("Active tab has no usable tab ID.");
-
-        // If url is available (host_permissions match), verify it's Seafarers.
-        // If url is hidden by Chrome, we still try — the user told us to.
-        if (tab.url) {
-          const origin = new URL(tab.url).origin;
-          if (!SFBR_ORIGINS.includes(origin)) {
-            throw new Error(
-              `Active tab is "${tab.url}". Switch to the Seafarers Panel tab first, then click Inject.`
-            );
-          }
-        }
-
-        step = "insert CSS";
-        await chrome.scripting.insertCSS({
-          target: { tabId: tab.id },
-          files:  ["sfbr-styles.css"]
-        });
-
-        step = "inject MAIN-world script";
-        await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          files:  ["sfbr-seafarers.js"],
-          world:  "MAIN"
-        });
-
-        step = "inject ISOLATED-world relay";
-        await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          files:  ["sfbr-relay.js"],
-          world:  "ISOLATED"
-        });
-
-        reply({
-          type: "sfbr_inject_response",
-          requestId,
-          ok: true,
-          tabId: tab.id,
-          tabUrl: tab.url || "(hidden)"
-        });
-      } catch (err) {
-        console.error(`[Toolkit/popup] sfbr_inject failed at step "${step}":`, err);
-        reply({
-          type: "sfbr_inject_response",
-          requestId,
-          ok: false,
-          error: `${err.message} (step: ${step})`
-        });
-      }
-      break;
+  // ── Legacy sfbr_inject — kept for one transition release, just delegates ─
+  if (msg.type === "sfbr_inject") {
+    const requestId = msg.requestId;
+    try {
+      await dispatchOp("css-on-tab",  { tabId: "active", cssUrl:    "sfbr-styles.css" });
+      await dispatchOp("exec-on-tab", { tabId: "active", scriptUrl: "sfbr-seafarers.js", world: "MAIN" });
+      reply({ type: "sfbr_inject_response", requestId, ok: true });
+    } catch (err) {
+      reply({ type: "sfbr_inject_response", requestId, ok: false, error: err.message });
     }
+    return;
   }
 });
+
+async function safeTabInfo() {
+  try {
+    const tab = await findActiveTab();
+    if (!tab) return null;
+    return { id: tab.id, url: tab.url || "(url not available)", title: tab.title || "" };
+  } catch (err) {
+    return { error: err.message };
+  }
+}
