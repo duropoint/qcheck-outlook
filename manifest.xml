@@ -11,8 +11,8 @@
   <Version>1.0.0.4</Version>
   <ProviderName>EUROMAR</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
-  <DisplayName DefaultValue="Q Check" />
-  <Description DefaultValue="Run PSC Q Check on any IMO number directly from Outlook." />
+  <DisplayName DefaultValue="Euromar Toolkit" />
+  <Description DefaultValue="Run the Euromar Toolkit functionalities directly from Outlook." />
   <IconUrl DefaultValue="https://duropoint.github.io/qcheck-outlook/assets/icon-64.png" />
   <HighResolutionIconUrl DefaultValue="https://duropoint.github.io/qcheck-outlook/assets/icon-128.png" />
   <SupportUrl DefaultValue="https://duropoint.github.io/qcheck-outlook/" />
@@ -120,11 +120,11 @@
         <bt:Url id="taskpaneUrl" DefaultValue="https://duropoint.github.io/qcheck-outlook/taskpane.html" />
       </bt:Urls>
       <bt:ShortStrings>
-        <bt:String id="groupLabel" DefaultValue="Q Check" />
-        <bt:String id="buttonLabel" DefaultValue="Q Check" />
+        <bt:String id="groupLabel" DefaultValue="Euromar Toolkit" />
+        <bt:String id="buttonLabel" DefaultValue="Euromar Toolkit" />
       </bt:ShortStrings>
       <bt:LongStrings>
-        <bt:String id="buttonTooltip" DefaultValue="Open the Q Check task pane to run a PSC inspection check on an IMO number." />
+        <bt:String id="buttonTooltip" DefaultValue="Open the Toolkit task pane to run several functionalities." />
       </bt:LongStrings>
     </Resources>
   </VersionOverrides>

@@ -1096,3 +1096,60 @@ input[type="text"]:focus, input[type="password"]:focus {
   font-size: 12px;
   color: #6b7280;
 }
+
+/* ---------- Company Search — stats card ---------- */
+.cs-stats-grid {
+  display: flex;
+  border-top: 1px solid #e2e8f0;
+}
+
+.cs-stat-item {
+  flex: 1;
+  padding: 12px 14px;
+  background: #fff;
+  text-align: center;
+}
+
+.cs-stat-item + .cs-stat-item {
+  border-left: 1px solid #e2e8f0;
+}
+
+.cs-stat-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.cs-stat-value {
+  font-size: 18px;
+  font-weight: 800;
+  color: #1a2332;
+}
+
+/* ---------- Company Search — fleet list ---------- */
+.cs-fleet-section {
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.cs-fleet-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.cs-fleet-status {
+  font-size: 12px;
+  color: #6b7280;
+  min-height: 16px;
+  margin-bottom: 6px;
+}

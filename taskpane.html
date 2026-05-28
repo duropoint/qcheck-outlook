@@ -73,6 +73,14 @@
             </div>
             <span class="fav-star-btn" data-tool="vessel-search" title="Add to Favorites">&#9734;</span>
           </button>
+          <button class="feature-tile" id="tileCompanySearchBtn">
+            <span class="feature-icon">&#127970;</span>
+            <div class="feature-info">
+              <div class="feature-name">Company Search</div>
+              <div class="feature-desc">Look up company data and fleet by name or IMO</div>
+            </div>
+            <span class="fav-star-btn" data-tool="company-search" title="Add to Favorites">&#9734;</span>
+          </button>
           <button class="feature-tile" id="tileZammadReportsBtn">
             <span class="feature-icon">&#128196;</span>
             <div class="feature-info">
@@ -113,12 +121,39 @@
             </div>
             <span class="fav-star-btn" data-tool="zoho-bridge" title="Add to Favorites">&#9734;</span>
           </button>
+          <button class="feature-tile" id="tileChkboxBtn">
+            <span class="feature-icon">&#9745;</span>
+            <div class="feature-info">
+              <div class="feature-name">Check All Checkboxes</div>
+              <div class="feature-desc">Tick all unchecked custom checkboxes on the Seafarers Panel</div>
+            </div>
+            <span class="fav-star-btn" data-tool="check-all-checkboxes" title="Add to Favorites">&#9734;</span>
+          </button>
         </div>
         <!-- Empty state: shown in non-extension contexts when no tools are available -->
         <div id="seafarersEmpty" class="hidden">
           <div class="info-note">
             <p>&#128100; More Seafarers tools are coming soon.</p>
             <p class="info-note-sub">Tools currently available in this category require the <strong>EUROMAR Toolkit Chrome Extension</strong>.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Seafarers — Check All Checkboxes tool -->
+    <div class="view hidden" id="seafarersCheckboxView">
+      <div class="view-body">
+        <div id="chkboxExtContent" class="hidden">
+          <div class="info-note">
+            <p>Click the button below to tick all unchecked custom checkboxes on the active Seafarers Panel tab.</p>
+          </div>
+          <button class="run-btn" id="chkboxRunBtn">Check All Checkboxes</button>
+          <div id="chkboxStatus" class="sfbr-status"></div>
+        </div>
+        <div id="chkboxNonExtNote" class="hidden">
+          <div class="info-note">
+            <p>&#9745; This tool requires the <strong>EUROMAR Toolkit Chrome Extension</strong>.</p>
+            <p class="info-note-sub">Install the extension to check all checkboxes directly in the Seafarers Panel.</p>
           </div>
         </div>
       </div>
@@ -161,13 +196,37 @@
     <div class="view hidden" id="zammadSearchView">
       <div class="view-body">
         <div class="zvl-search-wrap">
-          <input type="text" id="zvlSearchInput" placeholder="Type vessel name (min 2 chars)&#8230;" autocomplete="off" />
+          <input type="text" id="zvlSearchInput" placeholder="Vessel name or IMO&#8230;" autocomplete="off" />
         </div>
         <div id="zvlStatus" class="zvl-status"></div>
         <ul id="zvlResultsList" class="zvl-list"></ul>
         <div id="zvlDetail" class="zvl-detail hidden">
           <button class="zvl-back-btn" id="zvlBackToResults">&#8592; Results</button>
           <div id="zvlDetailCard" class="zvl-detail-card"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Company Search -->
+    <div class="view hidden" id="companySearchView">
+      <div class="view-body">
+        <div class="zvl-search-wrap">
+          <input type="text" id="csSearchInput" placeholder="Company name or IMO…" autocomplete="off" />
+        </div>
+        <div id="csStatus" class="zvl-status"></div>
+        <ul id="csResultsList" class="zvl-list"></ul>
+        <div id="csDetail" class="hidden">
+          <button class="zvl-back-btn" id="csBackToSearch">&#8592; Results</button>
+          <div id="csDetailCard" class="zvl-detail-card"></div>
+          <div class="cs-fleet-section">
+            <div class="cs-fleet-label">Fleet</div>
+            <div id="csFleetStatus" class="cs-fleet-status"></div>
+            <ul id="csFleetList" class="zvl-list"></ul>
+          </div>
+        </div>
+        <div id="csVesselSection" class="hidden">
+          <button class="zvl-back-btn" id="csBackToCompany">&#8592; Company</button>
+          <div id="csVesselDetailCard" class="zvl-detail-card"></div>
         </div>
       </div>
     </div>
