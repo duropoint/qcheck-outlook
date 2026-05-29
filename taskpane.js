@@ -263,6 +263,22 @@ function isExtensionContext() {
     || new URLSearchParams(location.search).get("context") === "extension";
 }
 
+/** Dynamic compose-mode check — re-evaluated each call so it works even if the
+ *  add-in was opened before a compose window was active. */
+function inComposeMode() {
+  try {
+    return !!(
+      typeof Office !== "undefined" &&
+      Office.context &&
+      Office.context.mailbox &&
+      Office.context.mailbox.item &&
+      Office.context.mailbox.item.body &&
+      typeof Office.context.mailbox.item.body.setSelectedDataAsync === "function" &&
+      typeof Office.context.mailbox.item.addFileAttachmentAsync === "function"
+    );
+  } catch (_) { return false; }
+}
+
 /**
  * Hide tool tiles that are marked extOnly in TOOL_DEFS when the UI is not
  * running inside the Chrome Extension.
@@ -2795,7 +2811,7 @@ function kbExecCopy(text, btn) {
 function kbRenderArticleActions(article) {
   kbArticleActions.innerHTML = "";
 
-  if (isComposeMode) {
+  if (inComposeMode()) {
     const insertBtn = document.createElement("button");
     insertBtn.className = "run-btn";
     insertBtn.textContent = "Insert into Reply";
@@ -2842,15 +2858,15 @@ function kbRenderAttachments(attachments) {
     nameEl.textContent = att.filename || "Attachment";
     row.appendChild(nameEl);
 
-    if (isComposeMode) {
-      // Outlook: two buttons — attach to email + copy link
+    if (inComposeMode()) {
+      // Outlook compose: attach file to email
       const attachBtn = document.createElement("button");
       attachBtn.className = "kb-attachment-btn";
       attachBtn.textContent = "Attach";
       attachBtn.addEventListener("click", () => {
         Office.context.mailbox.item.addFileAttachmentAsync(
           proxyUrl, att.filename || "attachment",
-          () => flashBtn(attachBtn, "Added ✓")
+          result => flashBtn(attachBtn, result.status === Office.AsyncResultStatus.Succeeded ? "Added ✓" : "Failed")
         );
       });
       row.appendChild(attachBtn);
