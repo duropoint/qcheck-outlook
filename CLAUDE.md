@@ -105,13 +105,13 @@ Five settings stored per-environment (see `env.js` table above):
 
 ### Architecture
 
-From v2.0.0 the extension is a **fixed thin shell** — it exposes 8 generic operations and never needs updating for new tools. All tool logic (Zoho bridge, future tools) is hosted under `/scripts/` on GitHub Pages and fetched at run-time.
+From v2.0.0 the extension is a **fixed thin shell** — it exposes generic operations and never needs updating for new tools. All tool logic (Zoho bridge, future tools) is hosted under `/scripts/` on GitHub Pages and fetched at run-time.
 
 ```
 euromar-toolkit-chrome/
   manifest.json          permissions: scripting, tabs, notifications, downloads, contextMenus, storage, sidePanel
-  background.js          relay receiver + same 8 ops for relay-originated requests
-  popup.js               iframe ↔ chrome.* bridge with 8 ops
+  background.js          relay receiver + same ops for relay-originated requests
+  popup.js               iframe ↔ chrome.* bridge with all generic ops
   popup.html / popup.css unchanged
   relay.js               GENERIC ISOLATED-world relay (never changes)
   icons/
@@ -123,17 +123,22 @@ scripts/                 (HOSTED, auto-deploys via GitHub Pages)
   ...future tool scripts
 ```
 
-### The 8 generic shell ops
+### Generic shell ops
 
 The hosted toolkit (taskpane.js) calls `callExtOp(type, payload)` which posts a message to popup.js and returns a Promise. Op handlers live in popup.js (for iframe-originated requests) and in background.js (for relay-originated requests — duplicated handlers because the two contexts cannot share modules).
 
 | Op | Payload | Purpose |
 |---|---|---|
-| `exec-on-tab` | `{ tabId, scriptUrl, world }` | Fetch JS from `/scripts/<scriptUrl>` and run in tab. Auto-injects relay.js. Default world: MAIN. |
+| `exec-on-tab` | `{ tabId, scriptUrl, world, data? }` | Fetch JS from `/scripts/<scriptUrl>` and run in tab. Auto-injects relay.js. `data` (optional) is set as `window.__euromarData` before the script runs so hosted scripts can receive structured data without URL-hash encoding. Default world: MAIN. |
+| `eval-on-tab` | `{ tabId, code, world? }` | Run arbitrary inline JS string on a tab and return the result. Useful for one-off dynamic operations or setting globals before a subsequent `exec-on-tab`. |
 | `css-on-tab` | `{ tabId, cssUrl }` | Fetch CSS and inject |
-| `open-tab` | `{ url, ops?, delay? }` | Open URL, wait for complete, run ops sequentially against the new tab |
-| `get-tab-info` | `{ tabId }` (or "active") | Return id/url/title |
+| `open-tab` | `{ url, ops?, delay? }` | Open a new tab at URL, wait for complete, run ops sequentially against it |
+| `navigate-tab` | `{ tabId, url, ops?, delay? }` | Navigate an **existing** tab to a new URL. For hash-only changes (same base URL) skips the load-wait to avoid a 25 s timeout. Supports `ops` chain after load. |
+| `get-tab-info` | `{ tabId }` (or `"active"`) | Return `{ id, url, title }` for a tab |
+| `get-tabs` | `{ urlPattern? }` | Return all open tabs, optionally filtered by URL substring. Returns `{ tabs: [{ id, url, title }] }`. |
+| `focus-tab` | `{ tabId }` | Activate a tab and bring its window to the foreground |
 | `close-tab` | `{ tabId }` | Close a tab |
+| `reload-tab` | `{ tabId, hard? }` | Reload a tab; `hard: true` bypasses cache |
 | `notify` | `{ title, message, iconUrl? }` | Chrome OS notification |
 | `badge` | `{ text, color? }` | Set extension icon badge |
 | `download` | `{ url, filename?, saveAs? }` | Download file via chrome.downloads |
@@ -175,7 +180,7 @@ After the v2.0.0 refactor: **the extension folder should not need changes for ne
 **Reinstall** (zip / "Load unpacked" again) — required for **any other change** to files inside `euromar-toolkit-chrome/` (shell logic, relay, popup HTML/CSS, new content scripts, etc.). Also required for any `manifest.json` permissions change.
 
 > **⚠️ Always ask the user before implementing anything that requires modifying the extension folder or `manifest.json`.**
-> The whole point of the v2.0.0 shell is to make this unnecessary for new tools. If you find yourself needing to add a file to `euromar-toolkit-chrome/`, stop — there is almost certainly a way to express the feature using the 8 existing ops with a hosted script.
+> The whole point of the v2.0.0 shell is to make this unnecessary for new tools. If you find yourself needing to add a file to `euromar-toolkit-chrome/`, stop — there is almost certainly a way to express the feature using the existing ops with a hosted script.
 
 ## CORS
 

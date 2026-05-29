@@ -2420,32 +2420,30 @@ async function sraExtractAndFill() {
 
     sraShowExtractedData(sraExtractedData);
 
-    // Verify the active tab is a Zoho form
+    // Verify the active tab is exactly the SRA registration form
+    const SRA_FORM_URL = "https://forms.zoho.com/europeanmarlda/report/BMARAppsubmitted/records/web";
     sraSetStatus("Checking active tab…", "info");
     const tabInfo = await callExtOp("get-tab-info", { tabId: "active" });
 
-    if (!tabInfo.url ||
-        (!tabInfo.url.includes("forms.zoho.com") &&
-         !tabInfo.url.includes("forms.zohopublic.eu"))) {
+    const tabBase = (tabInfo.url || "").split("#")[0].split("?")[0];
+    if (tabBase !== SRA_FORM_URL) {
       sraSetStatus(
-        "Active tab is not a Zoho form. Switch to the Zoho SRA form tab first, then click again.",
+        "Active tab is not the SRA form. Open the registration form in a tab first, then click again.",
         "error"
       );
       return;
     }
 
-    // Encode SRA data as URL hash, open fresh form tab, inject fill script
-    const dataHash = "sraData=" + btoa(JSON.stringify(sraExtractedData));
-    const fillUrl  = tabInfo.url.split("#")[0] + "#" + dataHash;
+    // Inject fill script with extracted data directly into the existing tab — no new tab opened
+    sraSetStatus("Filling form…", "info");
+    await callExtOp("exec-on-tab", {
+      tabId:     tabInfo.id,
+      scriptUrl: "sra-zoho.js",
+      world:     "MAIN",
+      data:      sraExtractedData
+    }, 30000);
 
-    sraSetStatus("Opening form tab and filling…", "info");
-    await callExtOp("open-tab", {
-      url:   fillUrl,
-      delay: 1000,
-      ops:   [{ type: "exec-on-tab", payload: { scriptUrl: "sra-zoho.js", world: "MAIN" } }]
-    }, 60000);
-
-    sraSetStatus("✓ SRA data filled in the new form tab.", "ok");
+    sraSetStatus("✓ SRA data filled in the form.", "ok");
     $("sraSharePointSection").classList.remove("hidden");
 
   } catch (err) {
