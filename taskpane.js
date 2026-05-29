@@ -97,6 +97,20 @@ const rptIncludeClosed  = $("rptIncludeClosed");
 const rptGenerateBtn    = $("rptGenerateBtn");
 const rptStatus         = $("rptStatus");
 
+const kbView            = $("kbView");
+const kbSearchInput     = $("kbSearchInput");
+const kbStatus          = $("kbStatus");
+const kbResultsList     = $("kbResultsList");
+const kbBrowsePanel     = $("kbBrowsePanel");
+const kbSearchPanel     = $("kbSearchPanel");
+const kbTree            = $("kbTree");
+const kbBrowseStatus    = $("kbBrowseStatus");
+const kbArticle         = $("kbArticle");
+const kbArticleHeader   = $("kbArticleHeader");
+const kbArticleBody     = $("kbArticleBody");
+const kbArticleActions  = $("kbArticleActions");
+const kbArticleBack     = $("kbArticleBack");
+
 let mode           = "company";
 let firstRun       = false;
 let pendingQCheck  = null;
@@ -121,6 +135,12 @@ let companySearchBack   = null; // back target for companySearchView
 let csSearchTimer    = null;
 let csResults        = [];
 let csCurrentCompany = null;
+
+let kbViewBack       = null;
+let kbSearchTimer    = null;
+let kbActiveTab      = "search"; // "search" | "browse"
+let kbTreeLoaded     = false;
+let kbArticleOrigin  = null;     // "search" | "browse" — where Back should return to
 
 // Favorites — array of tool IDs, persisted via SETTING_FAVORITES
 let favorites = [];
@@ -176,6 +196,21 @@ const TOOL_DEFS = {
       companySearchBack = origin || maritimeView;
       showView(companySearchView);
       setTimeout(() => csSearchInput.focus(), 80);
+    }
+  },
+  "knowledge-base": {
+    icon: "📚",
+    name: "Knowledge Base",
+    desc: "Search and browse Zammad knowledge base articles",
+    navigate(origin) {
+      kbViewBack = origin || maritimeView;
+      kbSearchInput.value = "";
+      kbStatus.textContent = "";
+      kbResultsList.innerHTML = "";
+      kbArticle.classList.add("hidden");
+      kbSwitchTab("search");
+      showView(kbView);
+      setTimeout(() => kbSearchInput.focus(), 80);
     }
   },
   "zoho-bridge": {
@@ -358,6 +393,9 @@ function bindEvents() {
   $("tileZammadReportsBtn").addEventListener("click", () => {
     TOOL_DEFS["zammad-reports"].navigate(maritimeView);
   });
+  $("tileKbBtn").addEventListener("click", () => {
+    TOOL_DEFS["knowledge-base"].navigate(maritimeView);
+  });
 
   // Sales sub-menu — Q Check re-routes to the same form (no duplication)
   $("tileSalesQCheckBtn").addEventListener("click", () => {
@@ -479,6 +517,11 @@ function bindEvents() {
     csDetail.classList.remove("hidden");
   });
   rptGenerateBtn.addEventListener("click", generateReport);
+
+  kbSearchInput.addEventListener("input", onKbInput);
+  $("kbTabSearch").addEventListener("click", () => kbSwitchTab("search"));
+  $("kbTabBrowse").addEventListener("click",  () => kbSwitchTab("browse"));
+  kbArticleBack.addEventListener("click", kbCloseArticle);
 }
 
 // ---------- Paste helper ----------
@@ -689,7 +732,7 @@ async function testConnection() {
 function showView(view) {
   [mainView, maritimeView, salesView, seafarersView, seafarersBridgeView, seafarersCheckboxView,
    seafarersZtbView, seafarersSraView, zammadSearchView, zammadReportsView, companySearchView,
-   formView, loadingView, errorView, confirmView, companyResult, vesselResult, settingsView]
+   kbView, formView, loadingView, errorView, confirmView, companyResult, vesselResult, settingsView]
     .filter(v => v)
     .forEach(v => v.classList.add("hidden"));
   view.classList.remove("hidden");
@@ -743,6 +786,9 @@ function updateNavChrome(view) {
   } else if (id === "zammadReportsView") {
     title = "Zammad Reports";
     backTarget = zammadReportsBack || maritimeView;
+  } else if (id === "kbView") {
+    title = "Knowledge Base";
+    backTarget = kbViewBack || maritimeView;
   } else if (id === "settingsView") {
     title = "Settings";
     if (!firstRun) backTarget = "settingsReturn";
@@ -2567,5 +2613,182 @@ async function sraOpenSharePoint() {
     if (statusEl) { statusEl.textContent = "✓ SharePoint folder opened."; statusEl.className = "sfbr-status ok"; }
   } catch (err) {
     if (statusEl) { statusEl.textContent = err.message || "Failed to open SharePoint."; statusEl.className = "sfbr-status error"; }
+  }
+}
+
+// ---------- Knowledge Base ----------
+
+function kbSwitchTab(tab) {
+  kbActiveTab = tab;
+  $("kbTabSearch").classList.toggle("active", tab === "search");
+  $("kbTabBrowse").classList.toggle("active",  tab === "browse");
+  kbSearchPanel.classList.toggle("hidden", tab !== "search");
+  kbBrowsePanel.classList.toggle("hidden",  tab !== "browse");
+  kbArticle.classList.add("hidden");
+  if (tab === "browse" && !kbTreeLoaded) kbLoadTree();
+}
+
+function onKbInput() {
+  const q = kbSearchInput.value.trim();
+  clearTimeout(kbSearchTimer);
+  kbArticle.classList.add("hidden");
+  kbResultsList.innerHTML = "";
+  if (q.length < 2) {
+    kbStatus.textContent = q.length === 1 ? "Type at least 2 characters." : "";
+    return;
+  }
+  kbStatus.textContent = "Searching…";
+  kbSearchTimer = setTimeout(() => doKbSearch(q), 300);
+}
+
+async function doKbSearch(q) {
+  const apiBase = (Env.getSetting(SETTING_API_BASE, DEFAULT_API_BASE) || DEFAULT_API_BASE).replace(/\/$/, "");
+  const token   = Env.getSetting(SETTING_ZAMMAD_TOKEN, "") || "";
+  if (!token) { kbStatus.textContent = "Zammad token not configured — open Settings."; return; }
+  try {
+    const resp = await fetch(`${apiBase}/api/zammad/kb/search?q=${encodeURIComponent(q)}`, {
+      headers: { "X-Zammad-Token": token }
+    });
+    if (resp.status === 401) { kbStatus.textContent = "Zammad token rejected (401)."; return; }
+    if (!resp.ok)             { kbStatus.textContent = `Error ${resp.status}.`; return; }
+    const data = await resp.json();
+    const results = Array.isArray(data) ? data : (data.results || []);
+    if (!results.length) {
+      kbStatus.textContent = "No articles found.";
+    } else {
+      kbStatus.textContent = `${results.length} article${results.length !== 1 ? "s" : ""}`;
+      renderKbResults(results);
+    }
+  } catch (err) {
+    kbStatus.textContent = "Network error: " + (err.message || "unknown");
+  }
+}
+
+function renderKbResults(results) {
+  kbResultsList.innerHTML = "";
+  results.forEach(r => {
+    const li = document.createElement("li");
+    li.className = "zvl-result-item";
+    li.innerHTML = `<div class="zvl-result-name">${escHtml(r.title || "Untitled")}</div>`
+                 + (r.category ? `<div class="zvl-result-imo">${escHtml(r.category)}</div>` : "");
+    li.addEventListener("click", () => kbShowArticle(r.id, "search"));
+    kbResultsList.appendChild(li);
+  });
+}
+
+async function kbLoadTree() {
+  const apiBase = (Env.getSetting(SETTING_API_BASE, DEFAULT_API_BASE) || DEFAULT_API_BASE).replace(/\/$/, "");
+  const token   = Env.getSetting(SETTING_ZAMMAD_TOKEN, "") || "";
+  if (!token) { kbBrowseStatus.textContent = "Zammad token not configured — open Settings."; return; }
+  kbBrowseStatus.textContent = "Loading…";
+  kbTree.innerHTML = "";
+  try {
+    const resp = await fetch(`${apiBase}/api/zammad/kb/tree`, {
+      headers: { "X-Zammad-Token": token }
+    });
+    if (resp.status === 401) { kbBrowseStatus.textContent = "Zammad token rejected (401)."; return; }
+    if (!resp.ok)             { kbBrowseStatus.textContent = `Error ${resp.status}.`; return; }
+    const categories = await resp.json();
+    kbBrowseStatus.textContent = "";
+    kbTreeLoaded = true;
+    renderKbTree(categories);
+  } catch (err) {
+    kbBrowseStatus.textContent = "Network error: " + (err.message || "unknown");
+  }
+}
+
+function renderKbTree(categories) {
+  kbTree.innerHTML = "";
+  if (!categories || !categories.length) {
+    kbTree.innerHTML = '<div class="zvl-status">No categories found.</div>';
+    return;
+  }
+  categories.forEach(cat => {
+    const section = document.createElement("div");
+    section.className = "kb-category";
+
+    const header = document.createElement("div");
+    header.className = "kb-category-header";
+    header.textContent = cat.name || "Unnamed";
+    header.addEventListener("click", () => section.classList.toggle("open"));
+    section.appendChild(header);
+
+    if (Array.isArray(cat.answers) && cat.answers.length) {
+      const list = document.createElement("ul");
+      list.className = "kb-answer-list zvl-list";
+      cat.answers.forEach(ans => {
+        const li = document.createElement("li");
+        li.className = "zvl-result-item kb-answer-item";
+        li.innerHTML = `<div class="zvl-result-name">${escHtml(ans.title || "Untitled")}</div>`;
+        li.addEventListener("click", () => kbShowArticle(ans.id, "browse"));
+        list.appendChild(li);
+      });
+      section.appendChild(list);
+    }
+
+    kbTree.appendChild(section);
+  });
+}
+
+async function kbShowArticle(id, origin) {
+  kbArticleOrigin = origin;
+  kbArticleHeader.textContent = "";
+  kbArticleBody.innerHTML = '<div class="zvl-status">Loading…</div>';
+  kbArticleActions.innerHTML = "";
+  kbArticle.classList.remove("hidden");
+  kbSearchPanel.classList.add("hidden");
+  kbBrowsePanel.classList.add("hidden");
+
+  const apiBase = (Env.getSetting(SETTING_API_BASE, DEFAULT_API_BASE) || DEFAULT_API_BASE).replace(/\/$/, "");
+  const token   = Env.getSetting(SETTING_ZAMMAD_TOKEN, "") || "";
+  try {
+    const resp = await fetch(`${apiBase}/api/zammad/kb/answer/${id}`, {
+      headers: { "X-Zammad-Token": token }
+    });
+    if (!resp.ok) { kbArticleBody.innerHTML = `<div class="zvl-status">Error ${resp.status}.</div>`; return; }
+    const article = await resp.json();
+    kbArticleHeader.textContent = article.title || "Untitled";
+    kbArticleBody.innerHTML = article.body || "<em>No content.</em>";
+    kbRenderArticleActions(article);
+  } catch (err) {
+    kbArticleBody.innerHTML = `<div class="zvl-status">Network error: ${escHtml(err.message || "unknown")}</div>`;
+  }
+}
+
+function kbRenderArticleActions(article) {
+  kbArticleActions.innerHTML = "";
+
+  if (isComposeMode) {
+    const insertBtn = document.createElement("button");
+    insertBtn.className = "run-btn";
+    insertBtn.textContent = "Insert into Reply";
+    insertBtn.addEventListener("click", () => {
+      const plain = kbArticleBody.innerText || "";
+      Office.context.mailbox.item.body.setSelectedDataAsync(
+        plain,
+        { coercionType: Office.CoercionType.Text },
+        () => flashBtn(insertBtn, "Inserted ✓")
+      );
+    });
+    kbArticleActions.appendChild(insertBtn);
+  }
+
+  const copyBtn = document.createElement("button");
+  copyBtn.className = "secondary-btn full";
+  copyBtn.style.marginTop = "8px";
+  copyBtn.textContent = "Copy Text";
+  copyBtn.addEventListener("click", () => {
+    const plain = kbArticleBody.innerText || "";
+    navigator.clipboard.writeText(plain).then(() => flashBtn(copyBtn, "Copied ✓")).catch(() => {});
+  });
+  kbArticleActions.appendChild(copyBtn);
+}
+
+function kbCloseArticle() {
+  kbArticle.classList.add("hidden");
+  if (kbArticleOrigin === "browse") {
+    kbBrowsePanel.classList.remove("hidden");
+  } else {
+    kbSearchPanel.classList.remove("hidden");
   }
 }

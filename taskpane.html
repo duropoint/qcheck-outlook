@@ -89,6 +89,14 @@
             </div>
             <span class="fav-star-btn" data-tool="zammad-reports" title="Add to Favorites">&#9734;</span>
           </button>
+          <button class="feature-tile" id="tileKbBtn">
+            <span class="feature-icon">&#128218;</span>
+            <div class="feature-info">
+              <div class="feature-name">Knowledge Base</div>
+              <div class="feature-desc">Search and browse Zammad knowledge base articles</div>
+            </div>
+            <span class="fav-star-btn" data-tool="knowledge-base" title="Add to Favorites">&#9734;</span>
+          </button>
         </div>
       </div>
     </div>
@@ -388,6 +396,42 @@
             <p>&#128203; This tool requires the <strong>EUROMAR Toolkit Chrome Extension</strong>.</p>
             <p class="info-note-sub">Install the extension to extract SRA data from PDFs and auto-fill the Zoho registration form.</p>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Knowledge Base -->
+    <div class="view hidden" id="kbView">
+      <div class="view-body">
+        <!-- Tab bar: Search / Browse -->
+        <div class="kb-tabs">
+          <button class="kb-tab active" id="kbTabSearch">Search</button>
+          <button class="kb-tab" id="kbTabBrowse">Browse</button>
+        </div>
+
+        <!-- Search panel -->
+        <div id="kbSearchPanel">
+          <div class="zvl-search-wrap">
+            <input type="text" id="kbSearchInput" placeholder="Search articles&#8230;" autocomplete="off" />
+          </div>
+          <div id="kbStatus" class="zvl-status"></div>
+          <ul id="kbResultsList" class="zvl-list"></ul>
+        </div>
+
+        <!-- Browse panel (hidden by default) -->
+        <div id="kbBrowsePanel" class="hidden">
+          <div id="kbBrowseStatus" class="zvl-status"></div>
+          <div id="kbTree" class="kb-tree"></div>
+        </div>
+
+        <!-- Article detail (overlays both panels) -->
+        <div id="kbArticle" class="hidden">
+          <button class="zvl-back-btn" id="kbArticleBack">&#8592; Back</button>
+          <div id="kbArticleCard" class="kb-article-card">
+            <div id="kbArticleHeader" class="kb-article-header"></div>
+            <div id="kbArticleBody" class="kb-article-body"></div>
+          </div>
+          <div id="kbArticleActions" class="kb-article-actions"></div>
         </div>
       </div>
     </div>
