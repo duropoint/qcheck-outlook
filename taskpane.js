@@ -584,7 +584,6 @@ function openSettings() {
   apiKeyInput.value          = Env.getSetting(SETTING_API_KEY, "");
   companiesApiKeyInput.value = Env.getSetting(SETTING_COMPANIES_KEY, "");
   zammadTokenInput.value     = Env.getSetting(SETTING_ZAMMAD_TOKEN, "");
-  zammadKbTokenInput.value   = Env.getSetting(SETTING_ZAMMAD_KB_TOKEN, "");
   dashboardApiKeyInput.value = Env.getSetting(SETTING_DASHBOARD_KEY, "");
   if (!Env.isOffice) userEmailInput.value = Env.getSetting(SETTING_USER_EMAIL, "");
   settingsStatus.textContent = "";
