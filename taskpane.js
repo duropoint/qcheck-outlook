@@ -2642,11 +2642,10 @@ function onKbInput() {
 }
 
 async function doKbSearch(q) {
-  const apiBase = (Env.getSetting(SETTING_API_BASE, DEFAULT_API_BASE) || DEFAULT_API_BASE).replace(/\/$/, "");
-  const token   = Env.getSetting(SETTING_ZAMMAD_TOKEN, "") || "";
+  const token = Env.getSetting(SETTING_ZAMMAD_TOKEN, "") || "";
   if (!token) { kbStatus.textContent = "Zammad token not configured — open Settings."; return; }
   try {
-    const resp = await fetch(`${apiBase}/api/zammad/kb/search?q=${encodeURIComponent(q)}`, {
+    const resp = await fetch(`${ZAMMAD_PROXY_URL}/kb/search?q=${encodeURIComponent(q)}`, {
       headers: { "X-Zammad-Token": token }
     });
     if (resp.status === 401) { kbStatus.textContent = "Zammad token rejected (401)."; return; }
@@ -2677,13 +2676,12 @@ function renderKbResults(results) {
 }
 
 async function kbLoadTree() {
-  const apiBase = (Env.getSetting(SETTING_API_BASE, DEFAULT_API_BASE) || DEFAULT_API_BASE).replace(/\/$/, "");
-  const token   = Env.getSetting(SETTING_ZAMMAD_TOKEN, "") || "";
+  const token = Env.getSetting(SETTING_ZAMMAD_TOKEN, "") || "";
   if (!token) { kbBrowseStatus.textContent = "Zammad token not configured — open Settings."; return; }
   kbBrowseStatus.textContent = "Loading…";
   kbTree.innerHTML = "";
   try {
-    const resp = await fetch(`${apiBase}/api/zammad/kb/tree`, {
+    const resp = await fetch(`${ZAMMAD_PROXY_URL}/kb/tree`, {
       headers: { "X-Zammad-Token": token }
     });
     if (resp.status === 401) { kbBrowseStatus.textContent = "Zammad token rejected (401)."; return; }
@@ -2739,10 +2737,9 @@ async function kbShowArticle(id, origin) {
   kbSearchPanel.classList.add("hidden");
   kbBrowsePanel.classList.add("hidden");
 
-  const apiBase = (Env.getSetting(SETTING_API_BASE, DEFAULT_API_BASE) || DEFAULT_API_BASE).replace(/\/$/, "");
-  const token   = Env.getSetting(SETTING_ZAMMAD_TOKEN, "") || "";
+  const token = Env.getSetting(SETTING_ZAMMAD_TOKEN, "") || "";
   try {
-    const resp = await fetch(`${apiBase}/api/zammad/kb/answer/${id}`, {
+    const resp = await fetch(`${ZAMMAD_PROXY_URL}/kb/answer/${id}`, {
       headers: { "X-Zammad-Token": token }
     });
     if (!resp.ok) { kbArticleBody.innerHTML = `<div class="zvl-status">Error ${resp.status}.</div>`; return; }
