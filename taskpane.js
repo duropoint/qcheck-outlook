@@ -2701,8 +2701,8 @@ function renderKbResults(results) {
   results.forEach(r => {
     const li = document.createElement("li");
     li.className = "zvl-result-item";
-    li.innerHTML = `<div class="zvl-result-name">${escHtml(r.title || "Untitled")}</div>`
-                 + (r.category ? `<div class="zvl-result-imo">${escHtml(r.category)}</div>` : "");
+    li.innerHTML = `<div class="zvl-result-name">${r.title || "Untitled"}</div>`
+                 + (r.category ? `<div class="zvl-result-imo">${r.category}</div>` : "");
     li.addEventListener("click", () => kbShowArticle(r.id, "search"));
     kbResultsList.appendChild(li);
   });
