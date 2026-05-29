@@ -2334,7 +2334,7 @@ function sraShowExtractedData(data) {
   if (data.issuingDate) html += `<div class="ztb-summary-item"><span class="ztb-summary-label">Issuing date:</span><span class="ztb-summary-value">${escHtml(data.issuingDate)}</span></div>`;
   if (data.validUntil)  html += `<div class="ztb-summary-item"><span class="ztb-summary-label">Valid until:</span><span class="ztb-summary-value">${escHtml(data.validUntil)}</span></div>`;
   if (data.personName)  html += `<div class="ztb-summary-item"><span class="ztb-summary-label">Name:</span><span class="ztb-summary-value">${escHtml(data.personName)}</span></div>`;
-  if (data.country)     html += `<div class="ztb-summary-item"><span class="ztb-summary-label">Country:</span><span class="ztb-summary-value">${escHtml(data.country)}</span></div>`;
+  if (data.dob)         html += `<div class="ztb-summary-item"><span class="ztb-summary-label">Date of birth:</span><span class="ztb-summary-value">${escHtml(data.dob)}</span></div>`;
   el.innerHTML = html;
   el.classList.toggle("hidden", !html);
 }
@@ -2378,17 +2378,77 @@ async function sraExtractPdfData(file, pdfjsLib) {
     /a\s+to\s+([A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖØÙÚÛÜÝ][a-zàáâãäåæçèéêëìíîïðñòóôõöøùúûüýÿąćęłńóśźż]+(?:\s+[A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖØÙÚÛÜÝ][a-zàáâãäåæçèéêëìíîïðñòóôõöøùúûüýÿąćęłńóśźż]+)*?)\s+Nacionalidade/i
   );
 
-  const countryMatch = fullText.match(/Government of\s+([A-Z][a-zà-ÿ]+(?:\s+[A-Z][a-zà-ÿ]+)*)/i);
+  const dobMatch  = fullText.match(/Nascimento[^0-9]*(\d{4}\/\d{2}\/\d{2})/i);
 
   const allDates = fullText.match(/\d{4}\/\d{2}\/\d{2}/g) || [];
 
   return {
-    sraNumber:  sraMatch     ? sraMatch[0]            : null,
-    personName: nameMatch    ? nameMatch[1].trim()    : null,
-    country:    countryMatch ? countryMatch[1].trim() : null,
+    sraNumber:   sraMatch  ? sraMatch[0]         : null,
+    personName:  nameMatch ? nameMatch[1].trim() : null,
+    dob:         dobMatch  ? dobMatch[1].replace(/\//g, "-") : null,
     issuingDate: allDates[0] ? allDates[0].replace(/\//g, "-") : null,
     validUntil:  allDates[1] ? allDates[1].replace(/\//g, "-") : null
   };
+}
+
+function sraFormReadCode() {
+  return `
+    function gv(doc, sel) { var el = doc.querySelector(sel); return el ? (el.value||'').trim() : ''; }
+    function readDoc(doc) {
+      var fn = gv(doc,'input[complink="Name_First"]') || gv(doc,'input[name*="First" i]') || gv(doc,'input[aria-label*="nome" i]');
+      var ln = gv(doc,'input[complink="Name_Last"]')  || gv(doc,'input[name*="Last" i]');
+      var name = (fn + ' ' + ln).trim();
+      var dob  = gv(doc,'input[name="Date"]') || gv(doc,'input[aria-label*="nascimento" i]') || gv(doc,'input[placeholder*="nascimento" i]');
+      var certs = ['SingleLine12','SingleLine13','SingleLine14','SingleLine15']
+        .map(function(n){ return gv(doc,'input[name="'+n+'"]'); }).filter(Boolean);
+      return { name: name, dob: dob, certs: certs };
+    }
+    var res = readDoc(document);
+    if (!res.name && !res.dob && !res.certs.length) {
+      var frames = document.querySelectorAll('iframe');
+      for (var i = 0; i < frames.length; i++) {
+        try {
+          var fd = frames[i].contentDocument||frames[i].contentWindow.document;
+          var r = readDoc(fd);
+          if (r.name||r.dob||r.certs.length) { res = r; break; }
+        } catch(_) {}
+      }
+    }
+    return res;
+  `;
+}
+
+function sraValidate(pdfData, formData) {
+  const errors = [];
+  const norm = s => (s || "").toLowerCase().replace(/\s+/g, " ").trim();
+
+  if (pdfData.personName && formData.name) {
+    const pn = norm(pdfData.personName);
+    const fn = norm(formData.name);
+    if (pn !== fn) {
+      const pWords = pn.split(" ").filter(w => w.length > 2);
+      if (!pWords.some(w => fn.includes(w))) {
+        errors.push(`Name mismatch! PDF: "${pdfData.personName}" vs form: "${formData.name}"`);
+      }
+    }
+  }
+
+  if (pdfData.dob && formData.dob) {
+    const normDate = d => (d || "").replace(/\//g, "-").trim();
+    if (normDate(pdfData.dob) !== normDate(formData.dob)) {
+      errors.push(`Date of birth mismatch! PDF: "${pdfData.dob}" vs form: "${formData.dob}"`);
+    }
+  }
+
+  if (formData.certs && formData.certs.length) {
+    for (const cert of (pdfData.sraNumbers || [])) {
+      if (!formData.certs.includes(cert)) {
+        errors.push(`Certificate "${cert}" not found in the form!`);
+      }
+    }
+  }
+
+  return errors;
 }
 
 async function sraExtractAndFill() {
@@ -2415,7 +2475,7 @@ async function sraExtractAndFill() {
       issuingDate: results[0]?.issuingDate || "",
       validUntil:  results[0]?.validUntil  || "",
       personName:  results[0]?.personName  || "",
-      country:     results[0]?.country     || ""
+      dob:         results[0]?.dob         || ""
     };
 
     sraShowExtractedData(sraExtractedData);
@@ -2434,6 +2494,20 @@ async function sraExtractAndFill() {
       return;
     }
 
+    // Read existing form values for cross-validation before filling
+    sraSetStatus("Validating against form…", "info");
+    const formRead = await callExtOp("eval-on-tab", {
+      tabId: tabInfo.id,
+      code:  sraFormReadCode(),
+      world: "MAIN"
+    }, 10000);
+    const formData  = (formRead && formRead.result) || {};
+    const valErrors = sraValidate(sraExtractedData, formData);
+    if (valErrors.length) {
+      sraSetStatus("❌ Validation errors: " + valErrors.join(" | "), "error");
+      return;
+    }
+
     // Inject fill script with extracted data directly into the existing tab — no new tab opened
     sraSetStatus("Filling form…", "info");
     await callExtOp("exec-on-tab", {
@@ -2445,6 +2519,20 @@ async function sraExtractAndFill() {
 
     sraSetStatus("✓ SRA data filled in the form.", "ok");
     $("sraSharePointSection").classList.remove("hidden");
+
+    // Auto-fill ship name from the form's Ship field
+    try {
+      const shipCode = `
+        var sels = ['input[name="SingleLine"]','input[aria-label*="ship" i]','input[placeholder*="ship" i]','input[placeholder*="vessel" i]'];
+        function tryDoc(d) { for (var s of sels) { var e = d.querySelector(s); if (e && e.value) return e.value.trim(); } return ''; }
+        var v = tryDoc(document);
+        if (!v) { var frames = document.querySelectorAll('iframe'); for (var i=0;i<frames.length;i++){try{var r=tryDoc(frames[i].contentDocument||frames[i].contentWindow.document);if(r){v=r;break;}}catch(_){}} }
+        return v;
+      `;
+      const shipRead = await callExtOp("eval-on-tab", { tabId: tabInfo.id, code: shipCode, world: "MAIN" }, 5000);
+      const shipEl = $("sraSpShipName");
+      if (shipEl && shipRead && shipRead.result) shipEl.value = shipRead.result;
+    } catch (_) {}
 
   } catch (err) {
     sraSetStatus(err.message || "Failed.", "error");
