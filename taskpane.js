@@ -2764,9 +2764,32 @@ async function kbShowArticle(id, origin) {
     kbArticleHeader.textContent = article.title || "Untitled";
     kbArticleBody.innerHTML = article.body || "<em>No content.</em>";
     kbRenderArticleActions(article);
+    kbRenderAttachments(article.attachments || []);
   } catch (err) {
     kbArticleBody.innerHTML = `<div class="zvl-status">Network error: ${escHtml(err.message || "unknown")}</div>`;
   }
+}
+
+function kbCopyText(text, btn) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text)
+      .then(() => flashBtn(btn, "Copied ✓"))
+      .catch(() => kbExecCopy(text, btn));
+  } else {
+    kbExecCopy(text, btn);
+  }
+}
+
+function kbExecCopy(text, btn) {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.cssText = "position:fixed;top:0;left:0;opacity:0;pointer-events:none;";
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try { document.execCommand("copy"); flashBtn(btn, "Copied ✓"); }
+  catch (_) { flashBtn(btn, "Copy failed"); }
+  document.body.removeChild(ta);
 }
 
 function kbRenderArticleActions(article) {
@@ -2791,11 +2814,65 @@ function kbRenderArticleActions(article) {
   copyBtn.className = "secondary-btn full";
   copyBtn.style.marginTop = "8px";
   copyBtn.textContent = "Copy Text";
-  copyBtn.addEventListener("click", () => {
-    const plain = kbArticleBody.innerText || "";
-    navigator.clipboard.writeText(plain).then(() => flashBtn(copyBtn, "Copied ✓")).catch(() => {});
-  });
+  copyBtn.addEventListener("click", () => kbCopyText(kbArticleBody.innerText || "", copyBtn));
   kbArticleActions.appendChild(copyBtn);
+}
+
+function kbRenderAttachments(attachments) {
+  const existing = $("kbAttachments");
+  if (existing) existing.remove();
+  if (!attachments.length) return;
+
+  const wrap = document.createElement("div");
+  wrap.id = "kbAttachments";
+  wrap.className = "kb-attachments";
+
+  const label = document.createElement("div");
+  label.className = "kb-attachments-label";
+  label.textContent = "Attachments";
+  wrap.appendChild(label);
+
+  attachments.forEach(att => {
+    const proxyUrl = `${ZAMMAD_PROXY_URL}/kb/attachment/${att.id}`;
+    const row = document.createElement("div");
+    row.className = "kb-attachment-row";
+
+    const nameEl = document.createElement("span");
+    nameEl.className = "kb-attachment-name";
+    nameEl.textContent = att.filename || "Attachment";
+    row.appendChild(nameEl);
+
+    if (isComposeMode) {
+      // Outlook: two buttons — attach to email + copy link
+      const attachBtn = document.createElement("button");
+      attachBtn.className = "kb-attachment-btn";
+      attachBtn.textContent = "Attach";
+      attachBtn.addEventListener("click", () => {
+        Office.context.mailbox.item.addFileAttachmentAsync(
+          proxyUrl, att.filename || "attachment",
+          () => flashBtn(attachBtn, "Added ✓")
+        );
+      });
+      row.appendChild(attachBtn);
+    } else {
+      // Chrome / browser: open download tab
+      const dlBtn = document.createElement("button");
+      dlBtn.className = "kb-attachment-btn";
+      dlBtn.textContent = "Download";
+      dlBtn.addEventListener("click", () => {
+        if (isExtensionContext()) {
+          callExtOp("open-tab", { url: proxyUrl }).catch(() => window.open(proxyUrl, "_blank"));
+        } else {
+          window.open(proxyUrl, "_blank");
+        }
+      });
+      row.appendChild(dlBtn);
+    }
+
+    wrap.appendChild(row);
+  });
+
+  kbArticleCard.appendChild(wrap);
 }
 
 function kbCloseArticle() {
