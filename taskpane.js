@@ -2816,10 +2816,10 @@ function kbRenderArticleActions(article) {
     insertBtn.className = "run-btn";
     insertBtn.textContent = "Insert into Reply";
     insertBtn.addEventListener("click", () => {
-      const plain = kbArticleBody.innerText || "";
+      const html = kbArticleBody.innerHTML || "";
       Office.context.mailbox.item.body.setSelectedDataAsync(
-        plain,
-        { coercionType: Office.CoercionType.Text },
+        html,
+        { coercionType: Office.CoercionType.Html },
         () => flashBtn(insertBtn, "Inserted ✓")
       );
     });
