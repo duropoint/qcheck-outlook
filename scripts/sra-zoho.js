@@ -1,13 +1,17 @@
-// sra-zoho.js — Read SRA data from URL hash and fill the Zoho registration form.
-// Injected into the Zoho form tab by the EUROMAR Toolkit via exec-on-tab.
+// sra-zoho.js — Fill the Zoho SRA registration form with extracted PDF data.
+// Data is received via window.__euromarData (exec-on-tab data injection) or URL hash fallback.
+// Injected into the existing form tab by the EUROMAR Toolkit via exec-on-tab.
 
 (function () {
-  var hashMatch = window.location.hash.match(/[#&]sraData=([^&]*)/);
-  if (!hashMatch) return;
-
   var data;
-  try { data = JSON.parse(atob(hashMatch[1])); }
-  catch (e) { console.error("[SRA] Could not parse sraData from hash"); return; }
+  if (window.__euromarData) {
+    data = window.__euromarData;
+  } else {
+    var hashMatch = window.location.hash.match(/[#&]sraData=([^&]*)/);
+    if (!hashMatch) return;
+    try { data = JSON.parse(atob(hashMatch[1])); }
+    catch (e) { console.error("[SRA] Could not parse sraData from hash"); return; }
+  }
 
   function findFormDoc() {
     var iframes = document.querySelectorAll("iframe");

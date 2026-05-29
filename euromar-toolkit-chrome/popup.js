@@ -1,5 +1,5 @@
 // popup.js — message bridge between the hosted toolkit iframe and the
-// extension's Chrome APIs. Handles all 8 generic operations directly so
+// extension's Chrome APIs. Handles all generic shell operations directly so
 // future tools can be added without touching this file.
 
 const TOOLKIT_URL    = "https://duropoint.github.io/qcheck-outlook/taskpane.html";
@@ -71,7 +71,7 @@ function waitForTabComplete(tabId) {
 
 // ── Generic operations ──────────────────────────────────────────────────────
 
-async function opExecOnTab({ tabId, scriptUrl, world }) {
+async function opExecOnTab({ tabId, scriptUrl, world, data }) {
   const id = await resolveTabId(tabId);
   const code = await fetchText(scriptUrl);
 
@@ -82,6 +82,10 @@ async function opExecOnTab({ tabId, scriptUrl, world }) {
     files:  ["relay.js"],
     world:  "ISOLATED"
   });
+
+  // Optional data injection: prepend window.__euromarData assignment so hosted
+  // scripts can receive structured data without URL-hash encoding.
+  const prefix = data !== undefined ? `window.__euromarData=${JSON.stringify(data)};\n` : "";
 
   // Inject the hosted code in the requested world via new Function().
   // For MAIN world this is subject to page CSP (script-src 'unsafe-eval').
@@ -94,7 +98,7 @@ async function opExecOnTab({ tabId, scriptUrl, world }) {
       try { new Function(code).call(window); }
       catch (e) { console.error("[EUROMAR] script error", url, e); throw e; }
     },
-    args: [code, scriptUrl]
+    args: [prefix + code, scriptUrl]
   });
 
   return { ok: true, tabId: id };
@@ -159,23 +163,83 @@ async function opDownload({ url, filename, saveAs }) {
   return { ok: true, downloadId };
 }
 
+async function opNavigateTab({ tabId, url, delay, ops }) {
+  const id = await resolveTabId(tabId);
+  // Hash-only navigation does not trigger status:"complete" in onUpdated,
+  // so detect same-base-URL changes and skip the load-wait.
+  let skipWait = false;
+  try {
+    const cur = await chrome.tabs.get(id);
+    if ((cur.url || "").split("#")[0] === url.split("#")[0]) skipWait = true;
+  } catch (_) {}
+  await chrome.tabs.update(id, { url });
+  if (!skipWait) await waitForTabComplete(id);
+  else await new Promise(r => setTimeout(r, 300));
+  if (delay) await new Promise(r => setTimeout(r, delay));
+  if (Array.isArray(ops)) {
+    for (const op of ops) await dispatchOp(op.type, { ...(op.payload || {}), tabId: id });
+  }
+  return { ok: true, tabId: id };
+}
+
+async function opGetTabs({ urlPattern } = {}) {
+  const all = await chrome.tabs.query({});
+  const tabs = urlPattern ? all.filter(t => t.url && t.url.includes(urlPattern)) : all;
+  return { ok: true, tabs: tabs.map(t => ({ id: t.id, url: t.url || "", title: t.title || "" })) };
+}
+
+async function opFocusTab({ tabId }) {
+  const id = await resolveTabId(tabId);
+  const tab = await chrome.tabs.get(id);
+  await chrome.tabs.update(id, { active: true });
+  try { await chrome.windows.update(tab.windowId, { focused: true }); } catch (_) {}
+  return { ok: true, tabId: id };
+}
+
+async function opReloadTab({ tabId, hard }) {
+  const id = await resolveTabId(tabId);
+  await chrome.tabs.reload(id, { bypassCache: !!hard });
+  await waitForTabComplete(id);
+  return { ok: true, tabId: id };
+}
+
+async function opEvalOnTab({ tabId, code, world }) {
+  const id = await resolveTabId(tabId);
+  await chrome.scripting.executeScript({ target: { tabId: id }, files: ["relay.js"], world: "ISOLATED" });
+  const targetWorld = world === "ISOLATED" ? "ISOLATED" : "MAIN";
+  const results = await chrome.scripting.executeScript({
+    target: { tabId: id },
+    world:  targetWorld,
+    func: (c) => { try { return new Function(c).call(window); } catch (e) { console.error("[EUROMAR] eval error", e); throw e; } },
+    args:   [code]
+  });
+  return { ok: true, tabId: id, result: results?.[0]?.result };
+}
+
 async function dispatchOp(type, payload) {
   switch (type) {
-    case "exec-on-tab":  return opExecOnTab(payload);
-    case "css-on-tab":   return opCssOnTab(payload);
-    case "open-tab":     return opOpenTab(payload);
-    case "get-tab-info": return opGetTabInfo(payload);
-    case "close-tab":    return opCloseTab(payload);
-    case "notify":       return opNotify(payload);
-    case "badge":        return opBadge(payload);
-    case "download":     return opDownload(payload);
+    case "exec-on-tab":   return opExecOnTab(payload);
+    case "css-on-tab":    return opCssOnTab(payload);
+    case "open-tab":      return opOpenTab(payload);
+    case "navigate-tab":  return opNavigateTab(payload);
+    case "get-tab-info":  return opGetTabInfo(payload);
+    case "get-tabs":      return opGetTabs(payload);
+    case "focus-tab":     return opFocusTab(payload);
+    case "close-tab":     return opCloseTab(payload);
+    case "reload-tab":    return opReloadTab(payload);
+    case "eval-on-tab":   return opEvalOnTab(payload);
+    case "notify":        return opNotify(payload);
+    case "badge":         return opBadge(payload);
+    case "download":      return opDownload(payload);
     default: throw new Error(`Unknown operation: ${type}`);
   }
 }
 
 const GENERIC_OPS = new Set([
-  "exec-on-tab", "css-on-tab", "open-tab", "get-tab-info",
-  "close-tab", "notify", "badge", "download"
+  "exec-on-tab", "css-on-tab", "open-tab", "navigate-tab",
+  "get-tab-info", "get-tabs", "focus-tab",
+  "close-tab", "reload-tab", "eval-on-tab",
+  "notify", "badge", "download"
 ]);
 
 // ── Message bridge ──────────────────────────────────────────────────────────
