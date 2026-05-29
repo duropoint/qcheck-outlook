@@ -727,10 +727,11 @@ async function testConnection() {
     lines.push("Knowledge Base: requires Dashboard API key");
   } else {
     try {
+      const zbToken = zammadTokenInput.value.trim();
       const resp = await fetch(`${ZAMMAD_PROXY_URL}/kb/tree`, {
-        headers: { "Authorization": `Bearer ${dashboardKey}` }
+        headers: { "X-Zammad-Token": zbToken }
       });
-      if (resp.status === 401)      lines.push("Knowledge Base: Dashboard key rejected (401)");
+      if (resp.status === 401)      lines.push("Knowledge Base: Zammad token rejected (401)");
       else if (resp.status === 404) lines.push("Knowledge Base: backend route not yet implemented");
       else if (!resp.ok)            lines.push(`Knowledge Base: error (${resp.status})`);
       else                          lines.push(`Knowledge Base: OK (${resp.status}) ✓`);
@@ -2658,13 +2659,13 @@ function onKbInput() {
 }
 
 async function doKbSearch(q) {
-  const dashboardKey = Env.getSetting(SETTING_DASHBOARD_KEY, "") || "";
-  if (!dashboardKey) { kbStatus.textContent = "Dashboard API key not configured — open Settings."; return; }
+  const token = Env.getSetting(SETTING_ZAMMAD_TOKEN, "") || "";
+  if (!token) { kbStatus.textContent = "Zammad token not configured — open Settings."; return; }
   try {
     const resp = await fetch(`${ZAMMAD_PROXY_URL}/kb/search?q=${encodeURIComponent(q)}`, {
-      headers: { "Authorization": `Bearer ${dashboardKey}` }
+      headers: { "X-Zammad-Token": token }
     });
-    if (resp.status === 401) { kbStatus.textContent = "Dashboard key rejected (401)."; return; }
+    if (resp.status === 401) { kbStatus.textContent = "Zammad token rejected (401)."; return; }
     if (!resp.ok)             { kbStatus.textContent = `Error ${resp.status}.`; return; }
     const data = await resp.json();
     const results = Array.isArray(data) ? data : (data.results || []);
@@ -2692,15 +2693,15 @@ function renderKbResults(results) {
 }
 
 async function kbLoadTree() {
-  const dashboardKey = Env.getSetting(SETTING_DASHBOARD_KEY, "") || "";
-  if (!dashboardKey) { kbBrowseStatus.textContent = "Dashboard API key not configured — open Settings."; return; }
+  const token = Env.getSetting(SETTING_ZAMMAD_TOKEN, "") || "";
+  if (!token) { kbBrowseStatus.textContent = "Zammad token not configured — open Settings."; return; }
   kbBrowseStatus.textContent = "Loading…";
   kbTree.innerHTML = "";
   try {
     const resp = await fetch(`${ZAMMAD_PROXY_URL}/kb/tree`, {
-      headers: { "Authorization": `Bearer ${dashboardKey}` }
+      headers: { "X-Zammad-Token": token }
     });
-    if (resp.status === 401) { kbBrowseStatus.textContent = "Dashboard key rejected (401)."; return; }
+    if (resp.status === 401) { kbBrowseStatus.textContent = "Zammad token rejected (401)."; return; }
     if (!resp.ok)             { kbBrowseStatus.textContent = `Error ${resp.status}.`; return; }
     const categories = await resp.json();
     kbBrowseStatus.textContent = "";
@@ -2753,10 +2754,10 @@ async function kbShowArticle(id, origin) {
   kbSearchPanel.classList.add("hidden");
   kbBrowsePanel.classList.add("hidden");
 
-  const dashboardKey = Env.getSetting(SETTING_DASHBOARD_KEY, "") || "";
+  const token = Env.getSetting(SETTING_ZAMMAD_TOKEN, "") || "";
   try {
     const resp = await fetch(`${ZAMMAD_PROXY_URL}/kb/answer/${id}`, {
-      headers: { "Authorization": `Bearer ${dashboardKey}` }
+      headers: { "X-Zammad-Token": token }
     });
     if (!resp.ok) { kbArticleBody.innerHTML = `<div class="zvl-status">Error ${resp.status}.</div>`; return; }
     const article = await resp.json();
