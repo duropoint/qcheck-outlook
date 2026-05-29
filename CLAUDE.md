@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Language
+
+**All user-facing text in the Toolkit must be in English only.** This includes button labels, status messages, error messages, tooltips, placeholders, and any other text visible to the user. Do not use Portuguese or any other language in UI strings, even when the underlying data or external forms are in Portuguese.
+
+CSS selectors, regex patterns, and code comments that reference Portuguese-language DOM attributes (e.g. `aria-label*="nascimento"`) are fine — those match external form labels and are not user-visible.
+
 ## Project overview
 
 The **EUROMAR Toolkit** is a collection of internal browser-based tools shared across the team. A single hosted UI (served from GitHub Pages) is embedded by two shells:

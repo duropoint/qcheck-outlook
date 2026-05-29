@@ -2428,7 +2428,7 @@ function sraValidate(pdfData, formData) {
     if (pn !== fn) {
       const pWords = pn.split(" ").filter(w => w.length > 2);
       if (!pWords.some(w => fn.includes(w))) {
-        errors.push(`Nome diferente! PDF: "${pdfData.personName}" vs Zoho: "${formData.name}"`);
+        errors.push(`Name mismatch! PDF: "${pdfData.personName}" vs form: "${formData.name}"`);
       }
     }
   }
@@ -2436,14 +2436,14 @@ function sraValidate(pdfData, formData) {
   if (pdfData.dob && formData.dob) {
     const normDate = d => (d || "").replace(/\//g, "-").trim();
     if (normDate(pdfData.dob) !== normDate(formData.dob)) {
-      errors.push(`Data de nascimento diferente! PDF: "${pdfData.dob}" vs Zoho: "${formData.dob}"`);
+      errors.push(`Date of birth mismatch! PDF: "${pdfData.dob}" vs form: "${formData.dob}"`);
     }
   }
 
   if (formData.certs && formData.certs.length) {
     for (const cert of (pdfData.sraNumbers || [])) {
       if (!formData.certs.includes(cert)) {
-        errors.push(`Certificado "${cert}" não encontrado no Zoho!`);
+        errors.push(`Certificate "${cert}" not found in the form!`);
       }
     }
   }
@@ -2504,7 +2504,7 @@ async function sraExtractAndFill() {
     const formData  = (formRead && formRead.result) || {};
     const valErrors = sraValidate(sraExtractedData, formData);
     if (valErrors.length) {
-      sraSetStatus("❌ Erros encontrados: " + valErrors.join(" | "), "error");
+      sraSetStatus("❌ Validation errors: " + valErrors.join(" | "), "error");
       return;
     }
 
