@@ -7,6 +7,7 @@ const SETTING_API_BASE      = "qcheck_api_base";
 const SETTING_API_KEY       = "qcheck_api_key";
 const SETTING_COMPANIES_KEY = "qcheck_companies_key";
 const SETTING_ZAMMAD_TOKEN   = "qcheck_zammad_token";
+const SETTING_ZAMMAD_KB_TOKEN = "qcheck_zammad_kb_token";
 const SETTING_DASHBOARD_KEY  = "qcheck_dashboard_key";
 const SETTING_USER_EMAIL     = "qcheck_user_email";
 const SETTING_FAVORITES      = "qcheck_favorites";
@@ -49,6 +50,7 @@ const apiKeyInput          = $("apiKey");
 const companiesApiKeyInput = $("companiesApiKey");
 const zammadTokenInput      = $("zammadTokenInput");
 const dashboardApiKeyInput  = $("dashboardApiKeyInput");
+const zammadKbTokenInput    = $("zammadKbTokenInput");
 const userEmailInput        = $("userEmailInput");
 const userEmailRow         = $("userEmailRow");
 const saveBtn              = $("saveBtn");
@@ -341,6 +343,7 @@ function initApp() {
     apiKeyInput.value          = Env.getSetting(SETTING_API_KEY, "");
     companiesApiKeyInput.value = Env.getSetting(SETTING_COMPANIES_KEY, "");
     zammadTokenInput.value     = Env.getSetting(SETTING_ZAMMAD_TOKEN, "");
+    zammadKbTokenInput.value   = Env.getSetting(SETTING_ZAMMAD_KB_TOKEN, "");
     dashboardApiKeyInput.value = Env.getSetting(SETTING_DASHBOARD_KEY, "");
     if (!Env.isOffice) userEmailInput.value = Env.getSetting(SETTING_USER_EMAIL, "");
     settingsStatus.textContent = "";
@@ -584,6 +587,7 @@ function openSettings() {
   apiKeyInput.value          = Env.getSetting(SETTING_API_KEY, "");
   companiesApiKeyInput.value = Env.getSetting(SETTING_COMPANIES_KEY, "");
   zammadTokenInput.value     = Env.getSetting(SETTING_ZAMMAD_TOKEN, "");
+  zammadKbTokenInput.value   = Env.getSetting(SETTING_ZAMMAD_KB_TOKEN, "");
   dashboardApiKeyInput.value = Env.getSetting(SETTING_DASHBOARD_KEY, "");
   if (!Env.isOffice) userEmailInput.value = Env.getSetting(SETTING_USER_EMAIL, "");
   settingsStatus.textContent = "";
@@ -596,6 +600,7 @@ async function saveSettings() {
   const key          = apiKeyInput.value.trim();
   const companiesKey = companiesApiKeyInput.value.trim();
   const zammadToken  = zammadTokenInput.value.trim();
+  const zammadKbToken = zammadKbTokenInput.value.trim();
   const dashboardKey = dashboardApiKeyInput.value.trim();
 
   if (!base) {
@@ -629,6 +634,7 @@ async function saveSettings() {
     await Env.setSetting(SETTING_API_KEY, key);
     await Env.setSetting(SETTING_COMPANIES_KEY, companiesKey);
     await Env.setSetting(SETTING_ZAMMAD_TOKEN, zammadToken);
+    await Env.setSetting(SETTING_ZAMMAD_KB_TOKEN, zammadKbToken);
     await Env.setSetting(SETTING_DASHBOARD_KEY, dashboardKey);
     if (!Env.isOffice) {
       await Env.setSetting(SETTING_USER_EMAIL, userEmailInput.value.trim());
@@ -648,11 +654,12 @@ async function saveSettings() {
 }
 
 async function testConnection() {
-  const base         = apiBaseInput.value.trim().replace(/\/$/, "") || DEFAULT_API_BASE;
-  const key          = apiKeyInput.value.trim();
-  const companiesKey = companiesApiKeyInput.value.trim();
-  const zammadToken  = zammadTokenInput.value.trim();
-  const dashboardKey = dashboardApiKeyInput.value.trim();
+  const base          = apiBaseInput.value.trim().replace(/\/$/, "") || DEFAULT_API_BASE;
+  const key           = apiKeyInput.value.trim();
+  const companiesKey  = companiesApiKeyInput.value.trim();
+  const zammadToken   = zammadTokenInput.value.trim();
+  const zammadKbToken = zammadKbTokenInput.value.trim();
+  const dashboardKey  = dashboardApiKeyInput.value.trim();
 
   settingsStatus.textContent = "Testing…";
   settingsStatus.className   = "status-msg";
@@ -703,6 +710,22 @@ async function testConnection() {
       else                          lines.push(`Zammad proxy: OK (${resp.status}) ✓`);
     } catch {
       lines.push("Zammad proxy: connection failed");
+    }
+  }
+
+  if (!zammadKbToken) {
+    lines.push("Zammad KB token: no key entered (required for Knowledge Base)");
+  } else {
+    try {
+      const resp = await fetch(`${ZAMMAD_PROXY_URL}/kb/tree`, {
+        headers: { "X-Zammad-Token": zammadKbToken }
+      });
+      if (resp.status === 401)      lines.push("Zammad KB token: rejected (401)");
+      else if (resp.status === 404) lines.push("Zammad KB token: endpoint not found (backend route missing)");
+      else if (!resp.ok)            lines.push(`Zammad KB token: error (${resp.status})`);
+      else                          lines.push(`Zammad KB token: OK (${resp.status}) ✓`);
+    } catch {
+      lines.push("Zammad KB token: connection failed");
     }
   }
 
@@ -2642,13 +2665,13 @@ function onKbInput() {
 }
 
 async function doKbSearch(q) {
-  const token = Env.getSetting(SETTING_ZAMMAD_TOKEN, "") || "";
-  if (!token) { kbStatus.textContent = "Zammad token not configured — open Settings."; return; }
+  const token = Env.getSetting(SETTING_ZAMMAD_KB_TOKEN, "") || "";
+  if (!token) { kbStatus.textContent = "Zammad KB token not configured — open Settings."; return; }
   try {
     const resp = await fetch(`${ZAMMAD_PROXY_URL}/kb/search?q=${encodeURIComponent(q)}`, {
       headers: { "X-Zammad-Token": token }
     });
-    if (resp.status === 401) { kbStatus.textContent = "Zammad token rejected (401)."; return; }
+    if (resp.status === 401) { kbStatus.textContent = "Zammad KB token rejected (401)."; return; }
     if (!resp.ok)             { kbStatus.textContent = `Error ${resp.status}.`; return; }
     const data = await resp.json();
     const results = Array.isArray(data) ? data : (data.results || []);
@@ -2676,15 +2699,15 @@ function renderKbResults(results) {
 }
 
 async function kbLoadTree() {
-  const token = Env.getSetting(SETTING_ZAMMAD_TOKEN, "") || "";
-  if (!token) { kbBrowseStatus.textContent = "Zammad token not configured — open Settings."; return; }
+  const token = Env.getSetting(SETTING_ZAMMAD_KB_TOKEN, "") || "";
+  if (!token) { kbBrowseStatus.textContent = "Zammad KB token not configured — open Settings."; return; }
   kbBrowseStatus.textContent = "Loading…";
   kbTree.innerHTML = "";
   try {
     const resp = await fetch(`${ZAMMAD_PROXY_URL}/kb/tree`, {
       headers: { "X-Zammad-Token": token }
     });
-    if (resp.status === 401) { kbBrowseStatus.textContent = "Zammad token rejected (401)."; return; }
+    if (resp.status === 401) { kbBrowseStatus.textContent = "Zammad KB token rejected (401)."; return; }
     if (!resp.ok)             { kbBrowseStatus.textContent = `Error ${resp.status}.`; return; }
     const categories = await resp.json();
     kbBrowseStatus.textContent = "";
@@ -2737,7 +2760,7 @@ async function kbShowArticle(id, origin) {
   kbSearchPanel.classList.add("hidden");
   kbBrowsePanel.classList.add("hidden");
 
-  const token = Env.getSetting(SETTING_ZAMMAD_TOKEN, "") || "";
+  const token = Env.getSetting(SETTING_ZAMMAD_KB_TOKEN, "") || "";
   try {
     const resp = await fetch(`${ZAMMAD_PROXY_URL}/kb/answer/${id}`, {
       headers: { "X-Zammad-Token": token }
